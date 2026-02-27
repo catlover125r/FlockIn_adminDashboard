@@ -24,6 +24,7 @@ export default function EventsPage() {
   const [deleting, setDeleting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [signupsEvent, setSignupsEvent] = useState<FlockEvent | null>(null);
 
   function addToast(message: string, type: 'success' | 'error') {
@@ -120,6 +121,30 @@ export default function EventsPage() {
       addToast('Failed to update event', 'error');
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleDuplicate(event: FlockEvent) {
+    setDuplicatingId(event.id);
+    try {
+      await createEvent({
+        title: `${event.title} (Copy)`,
+        task: event.task,
+        date: event.date,
+        time: event.time,
+        location: event.location,
+        latitude: event.latitude ?? 0,
+        longitude: event.longitude ?? 0,
+        hours: event.hours ?? 1,
+        positions: event.positions ?? 0,
+        isActive: false,
+      });
+      addToast('Event duplicated', 'success');
+      await loadEvents();
+    } catch {
+      addToast('Failed to duplicate event', 'error');
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -280,6 +305,24 @@ export default function EventsPage() {
                             <path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" />
                           </svg>
                           Sign-ups
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(event)}
+                          disabled={duplicatingId === event.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition disabled:opacity-50"
+                        >
+                          {duplicatingId === event.id ? (
+                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                            </svg>
+                          )}
+                          Duplicate
                         </button>
                         <button
                           onClick={() => openEdit(event)}
