@@ -203,56 +203,6 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Summary stat */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#8B5CF618' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Whitelisted</p>
-            <p className="text-2xl font-bold text-gray-900">{loading ? '—' : whitelistedStudents.length}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98118' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 12l2 2 4-4" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Signups</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {loading ? '—' : Object.values(signupCounts).reduce((a, b) => a + b, 0)}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F618' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Avg Signups</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {loading || whitelistedStudents.length === 0
-                ? '—'
-                : (
-                    Object.values(signupCounts).reduce((a, b) => a + b, 0) /
-                    whitelistedStudents.length
-                  ).toFixed(1)}
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Search bar */}
       <div className="mb-4">
         <div className="relative max-w-sm">
