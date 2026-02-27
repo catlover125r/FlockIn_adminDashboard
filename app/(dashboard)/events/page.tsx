@@ -26,6 +26,7 @@ export default function EventsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [signupsEvent, setSignupsEvent] = useState<FlockEvent | null>(null);
+  const [pastExpanded, setPastExpanded] = useState(false);
 
   function addToast(message: string, type: 'success' | 'error') {
     const id = Date.now();
@@ -179,6 +180,132 @@ export default function EventsPage() {
     setModalOpen(true);
   }
 
+  function isEventPast(event: FlockEvent): boolean {
+    if (!event.date || !event.time) return false;
+    const [year, month, day] = event.date.split('-').map(Number);
+    const [hour, min] = event.time.split(':').map(Number);
+    return new Date(year, month - 1, day, hour, min) < new Date();
+  }
+
+  const upcomingEvents = events.filter((e) => !isEventPast(e));
+  const pastEvents = events.filter((e) => isEventPast(e));
+
+  function renderRows(list: FlockEvent[]) {
+    return list.map((event) => (
+      <tr key={event.id} className="table-row-hover">
+        <td className="px-6 py-4">
+          <div className="font-medium text-sm text-gray-900">{event.title}</div>
+          <div className="text-xs text-gray-400 mt-0.5">
+            {(event.positions ?? 0) > 0 ? `${event.positions} spots` : 'Unlimited spots'}
+          </div>
+        </td>
+        <td className="px-6 py-4">
+          <span className="text-sm text-gray-600 line-clamp-1 max-w-[200px] block">{event.task}</span>
+        </td>
+        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventDate(event.date)}</td>
+        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventTime(event.time)}</td>
+        <td className="px-6 py-4">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
+            {event.hours ?? 0}h
+          </span>
+        </td>
+        <td className="px-6 py-4 text-sm text-gray-600">{event.location}</td>
+        <td className="px-6 py-4">
+          <button
+            onClick={() => handleToggleActive(event)}
+            disabled={togglingId === event.id}
+            className="flex items-center gap-2 group"
+            title={event.isActive ? 'Click to deactivate' : 'Click to activate'}
+          >
+            <span
+              className={`toggle-track ${event.isActive ? 'on' : ''} ${togglingId === event.id ? 'opacity-50' : ''}`}
+              style={{
+                background: event.isActive ? '#8B5CF6' : '#d1d5db',
+                display: 'inline-block',
+                width: 36,
+                height: 20,
+              }}
+            >
+              <span className="toggle-thumb" style={{ width: 16, height: 16 }} />
+            </span>
+            <span className={`text-xs font-semibold ${event.isActive ? 'text-violet-600' : 'text-gray-400'}`}>
+              {event.isActive ? 'Active' : 'Inactive'}
+            </span>
+          </button>
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setSignupsEvent(event)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+              Sign-ups
+            </button>
+            <button
+              onClick={() => handleDuplicate(event)}
+              disabled={duplicatingId === event.id}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition disabled:opacity-50"
+            >
+              {duplicatingId === event.id ? (
+                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              )}
+              Duplicate
+            </button>
+            <button
+              onClick={() => openEdit(event)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit
+            </button>
+            <button
+              onClick={() => setDeleteTarget(event)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-red-100 hover:text-red-600 transition"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4h6v2" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+    ));
+  }
+
+  const tableHead = (
+    <thead>
+      <tr className="bg-gray-50 border-b border-gray-100">
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Title</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Task</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Date</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Time</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Hours</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Location</th>
+        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Status</th>
+        <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Actions</th>
+      </tr>
+    </thead>
+  );
+
   return (
     <div>
       {/* Toast notifications */}
@@ -226,7 +353,7 @@ export default function EventsPage() {
         </button>
       </div>
 
-      {/* Table card */}
+      {/* Upcoming events table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -235,7 +362,7 @@ export default function EventsPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           </div>
-        ) : events.length === 0 ? (
+        ) : upcomingEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center mb-4">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="1.5" strokeLinecap="round">
@@ -245,137 +372,55 @@ export default function EventsPage() {
                 <line x1="3" y1="10" x2="21" y2="10" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-gray-700 mb-1">No events yet</p>
+            <p className="text-sm font-medium text-gray-700 mb-1">No upcoming events</p>
             <p className="text-xs text-gray-400 mb-5">Create your first event to get started</p>
-            <button
-              onClick={openAdd}
-              className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700"
-            >
+            <button onClick={openAdd} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700">
               Add Event
             </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Title</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Task</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Date</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Time</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Hours</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Location</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Status</th>
-                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {events.map((event) => (
-                  <tr key={event.id} className="table-row-hover">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-sm text-gray-900">{event.title}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {(event.positions ?? 0) > 0 ? `${event.positions} spots` : 'Unlimited spots'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600 line-clamp-1 max-w-[200px] block">{event.task}</span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventDate(event.date)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventTime(event.time)}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
-                        {event.hours ?? 0}h
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{event.location}</td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleToggleActive(event)}
-                        disabled={togglingId === event.id}
-                        className="flex items-center gap-2 group"
-                        title={event.isActive ? 'Click to deactivate' : 'Click to activate'}
-                      >
-                        <span
-                          className={`toggle-track ${event.isActive ? 'on' : ''} ${togglingId === event.id ? 'opacity-50' : ''}`}
-                          style={{
-                            background: event.isActive ? '#8B5CF6' : '#d1d5db',
-                            display: 'inline-block',
-                            width: 36,
-                            height: 20,
-                          }}
-                        >
-                          <span
-                            className="toggle-thumb"
-                            style={{ width: 16, height: 16 }}
-                          />
-                        </span>
-                        <span className={`text-xs font-semibold ${event.isActive ? 'text-violet-600' : 'text-gray-400'}`}>
-                          {event.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSignupsEvent(event)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" />
-                          </svg>
-                          Sign-ups
-                        </button>
-                        <button
-                          onClick={() => handleDuplicate(event)}
-                          disabled={duplicatingId === event.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition disabled:opacity-50"
-                        >
-                          {duplicatingId === event.id ? (
-                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                          ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                              <rect x="9" y="9" width="13" height="13" rx="2" />
-                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                            </svg>
-                          )}
-                          Duplicate
-                        </button>
-                        <button
-                          onClick={() => openEdit(event)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(event)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-red-100 hover:text-red-600 transition"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14H6L5 6" />
-                            <path d="M10 11v6M14 11v6" />
-                            <path d="M9 6V4h6v2" />
-                          </svg>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              {tableHead}
+              <tbody className="divide-y divide-gray-50">{renderRows(upcomingEvents)}</tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Past events section */}
+      {!loading && pastEvents.length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setPastExpanded((v) => !v)}
+            className="flex items-center gap-2 mb-3 group"
+          >
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform ${pastExpanded ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Past Events
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+              {pastEvents.length}
+            </span>
+          </button>
+
+          {pastExpanded && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden opacity-75">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  {tableHead}
+                  <tbody className="divide-y divide-gray-50">{renderRows(pastEvents)}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Event Modal */}
       <EventModal
