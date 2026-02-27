@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"/Users/lukepopler/Documents/code/Flock in/admin-dashboard/app/\\(dashboard\\)/\")"
+    ]
+  }
+}
