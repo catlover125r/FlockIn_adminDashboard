@@ -33,20 +33,41 @@ export default function EventsPage() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }
 
-  const loadEvents = useCallback(async () => {
-    setLoading(true);
+  const loadEvents = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
-      const data = await getEvents();
-      setEvents(data as FlockEvent[]);
+      const data = (await getEvents()) as FlockEvent[];
+
+      // Auto-activate any events whose scheduled time has arrived
+      const now = new Date();
+      const toActivate = data.filter((e) => {
+        if (e.isActive || !e.date || !e.time) return false;
+        const [year, month, day] = e.date.split('-').map(Number);
+        const [hour, min] = e.time.split(':').map(Number);
+        return new Date(year, month - 1, day, hour, min) <= now;
+      });
+
+      for (const event of toActivate) {
+        await updateEvent(event.id, { isActive: true });
+        await sendNotification(`${event.title} is now active!`, 'You can check in now');
+      }
+
+      const final = toActivate.length > 0
+        ? (await getEvents()) as FlockEvent[]
+        : data;
+      setEvents(final);
     } catch {
       addToast('Failed to load events', 'error');
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadEvents();
+    // Poll every minute so events activate on time while dashboard is open
+    const interval = setInterval(() => loadEvents(false), 60_000);
+    return () => clearInterval(interval);
   }, [loadEvents]);
 
   async function sendNotification(title: string, body: string) {
