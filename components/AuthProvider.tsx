@@ -33,8 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
       if (firebaseUser) {
-        const adminStatus = await isAdmin(firebaseUser.uid);
-        setIsAdminUser(adminStatus);
+        try {
+          const adminStatus = await isAdmin(firebaseUser.uid);
+          setIsAdminUser(adminStatus);
+        } catch {
+          setIsAdminUser(false);
+        }
         setUser(firebaseUser);
       } else {
         setUser(null);
