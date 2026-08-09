@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User,
@@ -63,6 +65,30 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 export async function signInWithGoogle(): Promise<User> {
   const result = await signInWithPopup(auth, googleProvider);
   return result.user;
+}
+
+/**
+ * Popup-free sign-in, for machines where the popup is blocked outright or never
+ * comes back. Navigates this tab to Google and returns to /login afterwards, so
+ * it never resolves — the result is picked up by completeRedirectSignIn() on
+ * the way back in.
+ *
+ * This only works because /__/auth/* is proxied through our own origin (see
+ * next.config.mjs); against the default firebaseapp.com authDomain the redirect
+ * flow is the *more* fragile of the two, since it leans harder on third-party
+ * storage surviving the round trip.
+ */
+export async function signInWithGoogleRedirect(): Promise<void> {
+  await signInWithRedirect(auth, googleProvider);
+}
+
+/**
+ * Resolves the pending redirect sign-in, if this page load is the return leg.
+ * Returns null on an ordinary page load.
+ */
+export async function completeRedirectSignIn(): Promise<User | null> {
+  const result = await getRedirectResult(auth);
+  return result?.user ?? null;
 }
 
 export async function signOut(): Promise<void> {

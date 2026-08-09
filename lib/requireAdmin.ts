@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDB } from '@/lib/firebaseAdmin';
-import admin from '@/lib/firebaseAdmin';
+import { getAdminDB, getAdminAuth } from '@/lib/firebaseAdmin';
 
 /**
  * Result of an admin check: either the verified uid, or the response to return.
@@ -32,7 +31,7 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
   try {
     // checkRevoked: a signed-out or disabled admin must stop working immediately,
     // not when their hour-long token happens to expire.
-    const decoded = await admin.auth().verifyIdToken(token, true);
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
     uid = decoded.uid;
   } catch {
     return {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from '@/lib/firebaseAdmin';
+import { getAdminAuth } from '@/lib/firebaseAdmin';
 
 type UserCheck =
   | { ok: true; uid: string; email: string }
@@ -21,7 +21,7 @@ export async function requireUser(req: NextRequest): Promise<UserCheck> {
   }
 
   try {
-    const decoded = await admin.auth().verifyIdToken(token, true);
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
     if (!decoded.email) {
       return {
         ok: false,

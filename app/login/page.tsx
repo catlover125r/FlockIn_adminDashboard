@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithGoogle, isAdmin, signOut } from '@/lib/firebase';
+import type { User } from 'firebase/auth';
+import {
+  signInWithGoogle,
+  signInWithGoogleRedirect,
+  completeRedirectSignIn,
+  isAdmin,
+  signOut,
+} from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 
 // signInWithPopup does not always settle. If the popup is dismissed in a way
@@ -31,16 +38,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+function errorCode(err: unknown): string {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code: unknown }).code)
+    : '';
+}
+
 // Firebase puts the useful part in err.code; err.message is the same string
 // wrapped in "Firebase: Error (...)" boilerplate that means nothing to an
 // advisor looking at the login screen.
 function friendlySignInError(err: unknown): string | null {
-  const code =
-    typeof err === 'object' && err !== null && 'code' in err
-      ? String((err as { code: unknown }).code)
-      : '';
-
-  switch (code) {
+  switch (errorCode(err)) {
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
       return null; // User dismissed the popup — not an error
@@ -62,6 +70,25 @@ export default function LoginPage() {
   const router = useRouter();
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A redirect sign-in lands back here as an ordinary page load, and
+  // getRedirectResult has to settle before we know whether this is the return
+  // leg or somebody arriving fresh. Start busy so the button cannot be pressed
+  // into a second, competing sign-in during that window.
+  const [resumingRedirect, setResumingRedirect] = useState(true);
+
+  // Shared tail of both flows: admins go through, everyone else is signed back
+  // out so a non-admin Google session is not left lying around.
+  const admit = useCallback(
+    async (firebaseUser: User) => {
+      if (await isAdmin(firebaseUser.uid)) {
+        router.replace('/');
+        return;
+      }
+      await signOut();
+      setError('Access denied. You are not an admin.');
+    },
+    [router]
+  );
 
   // If already authenticated as admin, redirect. This also catches a sign-in
   // that completed after handleGoogleSignIn stopped waiting on it, and it reads
@@ -73,23 +100,51 @@ export default function LoginPage() {
     }
   }, [user, isAdminUser, loading, router]);
 
+  useEffect(() => {
+    let cancelled = false;
+    completeRedirectSignIn()
+      .then((firebaseUser) => (firebaseUser && !cancelled ? admit(firebaseUser) : undefined))
+      .catch((err: unknown) => {
+        console.error('[FlockIn admin] Redirect sign-in failed', err);
+        const message = friendlySignInError(err);
+        if (!cancelled && message) setError(message);
+      })
+      .finally(() => {
+        if (!cancelled) setResumingRedirect(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [admit]);
+
+  async function startRedirectSignIn() {
+    setSigningIn(true);
+    setError(null);
+    try {
+      await signInWithGoogleRedirect();
+    } catch (err: unknown) {
+      console.error('[FlockIn admin] Could not start redirect sign-in', err);
+      setError(friendlySignInError(err) ?? 'Sign-in failed. Please try again.');
+      setSigningIn(false);
+    }
+  }
+
   async function handleGoogleSignIn() {
     setSigningIn(true);
     setError(null);
     try {
       const firebaseUser = await withTimeout(signInWithGoogle(), SIGN_IN_TIMEOUT_MS);
-      const adminCheck = await isAdmin(firebaseUser.uid);
-      if (adminCheck) {
-        router.replace('/');
-      } else {
-        await signOut();
-        setError('Access denied. You are not an admin.');
-      }
+      await admit(firebaseUser);
     } catch (err: unknown) {
       if (err instanceof SignInTimeout) {
         setError(
-          'Sign-in is taking longer than expected. Check for a Google popup window behind this one, then try again.'
+          'Sign-in is taking longer than expected. Check for a Google popup window behind this one, or use "Sign in without a popup" below.'
         );
+      } else if (errorCode(err) === 'auth/popup-blocked') {
+        // There is nothing for the user to fix here, so take the popup-free
+        // route rather than telling them to go change a browser setting.
+        await startRedirectSignIn();
+        return;
       } else {
         // The friendly text drops the detail worth having in a bug report.
         console.error('[FlockIn admin] Google sign-in failed', err);
@@ -100,6 +155,8 @@ export default function LoginPage() {
       setSigningIn(false);
     }
   }
+
+  const busy = signingIn || resumingRedirect;
 
   return (
     <div
@@ -184,10 +241,10 @@ export default function LoginPage() {
           {/* Google Sign In Button */}
           <button
             onClick={handleGoogleSignIn}
-            disabled={signingIn}
+            disabled={busy}
             className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl px-4 py-3 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
           >
-            {signingIn ? (
+            {busy ? (
               <>
                 <svg className="animate-spin h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -219,6 +276,17 @@ export default function LoginPage() {
                 <span>Sign in with Google</span>
               </>
             )}
+          </button>
+
+          {/* Escape hatch for machines where the popup is blocked or simply
+              never opens — common on managed school profiles. */}
+          <button
+            type="button"
+            onClick={startRedirectSignIn}
+            disabled={busy}
+            className="w-full text-center text-xs text-gray-500 hover:text-violet-600 underline underline-offset-2 mt-3 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Sign in without a popup
           </button>
 
           <p className="text-xs text-gray-400 text-center mt-5 leading-relaxed">

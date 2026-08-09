@@ -30,12 +30,29 @@ function getAdminApp(): admin.app.App {
   });
 }
 
-export function getAdminDB() {
+// These return types are written out rather than inferred. Inferred, they name
+// the `admin` namespace, which is only in scope in this file — consumers then
+// fail to typecheck with "Cannot find name 'admin'" pointing at the call site.
+export function getAdminDB(): admin.firestore.Firestore {
   const app = getAdminApp();
   return admin.firestore(app);
 }
 
-export function getAdminMessaging() {
+/**
+ * Auth bound to the initialized app.
+ *
+ * Reaching for a bare `admin.auth()` throws "the default Firebase app does not
+ * exist" on a cold serverless instance, because nothing has called
+ * getAdminApp() yet. Both token guards run before any Firestore access, so on
+ * Vercel that throw landed inside their catch blocks and every caller — app and
+ * dashboard alike — got a 401 that looked like a bad token.
+ */
+export function getAdminAuth(): admin.auth.Auth {
+  const app = getAdminApp();
+  return admin.auth(app);
+}
+
+export function getAdminMessaging(): admin.messaging.Messaging {
   const app = getAdminApp();
   return admin.messaging(app);
 }
