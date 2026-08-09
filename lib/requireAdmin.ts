@@ -27,11 +27,24 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
     };
   }
 
+  // See requireUser: a broken service-account env var surfaces here, and
+  // reporting it as 401 blames the caller for the deployment's problem.
+  let adminAuth: ReturnType<typeof getAdminAuth>;
+  try {
+    adminAuth = getAdminAuth();
+  } catch (error) {
+    console.error('[requireAdmin] Admin SDK unavailable:', error);
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'server_misconfigured' }, { status: 500 }),
+    };
+  }
+
   let uid: string;
   try {
     // checkRevoked: a signed-out or disabled admin must stop working immediately,
     // not when their hour-long token happens to expire.
-    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    const decoded = await adminAuth.verifyIdToken(token, true);
     uid = decoded.uid;
   } catch {
     return {

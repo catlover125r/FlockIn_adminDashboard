@@ -20,8 +20,23 @@ export async function requireUser(req: NextRequest): Promise<UserCheck> {
     };
   }
 
+  // A missing or malformed FIREBASE_ADMIN_SERVICE_ACCOUNT throws here rather
+  // than at token verification. Folding it into the 401 below reported a
+  // server misconfiguration as a rejected credential, which sent debugging
+  // after the caller's token instead of the deployment's environment.
+  let adminAuth: ReturnType<typeof getAdminAuth>;
   try {
-    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    adminAuth = getAdminAuth();
+  } catch (error) {
+    console.error('[requireUser] Admin SDK unavailable:', error);
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'server_misconfigured' }, { status: 500 }),
+    };
+  }
+
+  try {
+    const decoded = await adminAuth.verifyIdToken(token, true);
     if (!decoded.email) {
       return {
         ok: false,
