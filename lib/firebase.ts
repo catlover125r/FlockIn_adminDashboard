@@ -25,9 +25,24 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 
+// next.config.mjs reverse-proxies /__/auth/* to <project>.firebaseapp.com, so
+// the sign-in helper is available on whatever origin the app is being served
+// from. Pointing authDomain at that origin keeps the popup handshake
+// first-party; leaving it on firebaseapp.com makes it a cross-site iframe,
+// which Chrome's third-party storage blocking silently breaks — signInWithPopup
+// then hangs forever instead of failing.
+//
+// Every host reached this way still has to be listed under Firebase Console →
+// Authentication → Settings → Authorized domains. The env var is the value used
+// during SSR, where there is no window to read.
+const authDomain =
+  typeof window !== 'undefined'
+    ? window.location.host
+    : process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!;
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  authDomain,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
@@ -59,8 +74,34 @@ export function onAuthChange(callback: (user: User | null) => void) {
 }
 
 export async function isAdmin(uid: string): Promise<boolean> {
-  const snap = await getDoc(doc(db, 'admins', uid));
-  return snap.exists();
+  try {
+    const snap = await getDoc(doc(db, 'admins', uid));
+    return snap.exists();
+  } catch {
+    // A denied read means "not an admin" just as much as a missing document
+    // does. Letting it throw put the raw "Missing or insufficient permissions"
+    // on the login screen instead of the access-denied message.
+    return false;
+  }
+}
+
+/**
+ * POSTs JSON to one of our API routes with the signed-in user's Firebase ID
+ * token attached. Those routes run with Admin SDK credentials, so they verify
+ * this token themselves rather than relying on Firestore rules.
+ */
+export async function postAuthed(path: string, body: unknown): Promise<Response> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in');
+  const token = await user.getIdToken();
+  return fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -98,11 +139,19 @@ export async function getStudents() {
 }
 
 export async function addStudent(sanitizedEmail: string, data: Record<string, unknown>) {
-  await setDoc(doc(db, 'students', sanitizedEmail), {
-    ...data,
-    isWhitelisted: true,
-    createdAt: serverTimestamp(),
-  });
+  const ref = doc(db, 'students', sanitizedEmail);
+  const existing = await getDoc(ref);
+  // This used to be a whole-document setDoc, so re-importing the roster CSV
+  // replaced each returning student's record outright: fcmToken, uid and
+  // lastSignIn were dropped (silently breaking push for them) and createdAt
+  // was reset to today. Merge, and only stamp createdAt on a genuinely new row.
+  await setDoc(
+    ref,
+    existing.exists()
+      ? { ...data, isWhitelisted: true }
+      : { ...data, isWhitelisted: true, createdAt: serverTimestamp() },
+    { merge: true }
+  );
 }
 
 export async function removeStudent(sanitizedEmail: string) {

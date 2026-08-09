@@ -12,6 +12,10 @@ node_modules/
 .env.local
 .env.*.local
 
+# build/debug artifacts
+tsconfig.tsbuildinfo
+firestore-debug.log
+
 # misc
 .DS_Store
 *.pem
