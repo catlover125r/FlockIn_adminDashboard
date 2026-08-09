@@ -6,9 +6,10 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  postAuthed,
 } from '@/lib/firebase';
 import type { FlockEvent } from '@/lib/types';
-import { formatTimestamp, formatEventDate, formatEventTime } from '@/lib/types';
+import { formatEventDate, formatEventTime } from '@/lib/types';
 import EventModal from '@/components/EventModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SignupsModal from '@/components/SignupsModal';
@@ -73,11 +74,7 @@ export default function EventsPage() {
 
   async function sendNotification(title: string, body: string) {
     try {
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body }),
-      });
+      await postAuthed('/api/notify', { title, body });
     } catch {
       // Non-fatal: notification failure shouldn't block the UI
     }

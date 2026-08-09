@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDB } from '@/lib/firebaseAdmin';
 import admin from '@/lib/firebaseAdmin';
+import { requireAdmin } from '@/lib/requireAdmin';
+import { broadcastNotification } from '@/lib/notify';
 
 interface CreateEventBody {
   title: string;
@@ -16,6 +18,11 @@ interface CreateEventBody {
 }
 
 export async function POST(req: NextRequest) {
+  // Writes to /events with Admin SDK credentials, which bypass Firestore
+  // rules — the check has to happen here.
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = (await req.json()) as CreateEventBody;
     const { title, task, date, time, location, latitude, longitude, isActive = false, hours = 1, positions = 0 } = body;
@@ -24,6 +31,20 @@ export async function POST(req: NextRequest) {
     if (!title || !task || !date || !time || !location) {
       return NextResponse.json(
         { error: 'Missing required fields: title, task, date, time, location' },
+        { status: 400 }
+      );
+    }
+
+    if (typeof hours !== 'number' || !isFinite(hours) || hours < 0) {
+      return NextResponse.json(
+        { error: 'hours must be a non-negative number' },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isInteger(positions) || positions < 0) {
+      return NextResponse.json(
+        { error: 'positions must be a non-negative whole number' },
         { status: 400 }
       );
     }
@@ -48,20 +69,10 @@ export async function POST(req: NextRequest) {
     // Send push notification to all whitelisted students
     let notifResult = { sent: 0, failed: 0 };
     try {
-      const notifRes = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/api/notify`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: `New Event: ${title}`,
-            body: `${task} on ${date} at ${time}`,
-          }),
-        }
+      notifResult = await broadcastNotification(
+        `New Event: ${title}`,
+        `${task} on ${date} at ${time}`
       );
-      if (notifRes.ok) {
-        notifResult = await notifRes.json();
-      }
     } catch (notifError) {
       console.warn('[events/POST] Failed to send notification:', notifError);
     }
@@ -76,7 +87,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: unknown) {
     console.error('[events/POST] Unhandled error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

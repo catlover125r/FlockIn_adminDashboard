@@ -51,7 +51,7 @@ export default function StudentSignupsModal({ student, onClose, onSignupDeleted 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">{student.displayName}'s Sign-ups</h2>
+            <h2 className="text-lg font-bold text-gray-900">{student.displayName}&apos;s Sign-ups</h2>
             <p className="text-xs text-gray-400">{student.email}</p>
           </div>
           <button

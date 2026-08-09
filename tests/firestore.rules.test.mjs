@@ -1,0 +1,213 @@
+import {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+} from '@firebase/rules-unit-testing';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import {
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
+} from 'firebase/firestore';
+
+// ../../firestore.rules — the file that gets pasted into the Firebase console.
+const RULES = fileURLToPath(new URL('../../firestore.rules', import.meta.url));
+
+const testEnv = await initializeTestEnvironment({
+  projectId: 'flockin-rules-test',
+  firestore: { rules: readFileSync(RULES, 'utf8'), host: '127.0.0.1', port: 8080 },
+});
+
+// ── Fixtures ────────────────────────────────────────────────────────────────
+const ALICE_UID = 'alice-uid';
+const ALICE_EMAIL = 'alice.smith@seq.org';
+const ALICE_DOC = 'alice_smith_at_seq_org';
+
+const MALLORY_UID = 'mallory-uid';
+const MALLORY_EMAIL = 'mallory@seq.org';
+const MALLORY_DOC = 'mallory_at_seq_org';
+
+const GHOST_UID = 'ghost-uid';           // removed from the whitelist
+const GHOST_EMAIL = 'ghost@seq.org';
+const GHOST_DOC = 'ghost_at_seq_org';
+
+const STAFF_UID = 'staff-uid';
+const STAFF_EMAIL = 'admin@flockin.local';
+
+const ADMIN_UID = 'admin-uid';
+
+const EVENT_ACTIVE = 'evt-active';
+const EVENT_IDLE = 'evt-idle';
+
+const sid = (evt, uid) => `${evt}_${uid}`;
+const ALICE_SIGNUP = sid(EVENT_ACTIVE, ALICE_UID);
+const MALLORY_SIGNUP = sid(EVENT_IDLE, MALLORY_UID);
+const ALICE_SPARE = sid('evt-spare', ALICE_UID);
+
+const signupDoc = (evt, uid, email, hours, active) => ({
+  eventId: evt, eventTitle: 'Rally', eventTask: 'Setup', eventDate: '2026-01-01',
+  eventTime: '10:00', eventLocation: 'Gym', eventLatitude: 0, eventLongitude: 0,
+  eventHours: hours, eventPositions: 0,
+  studentUid: uid, studentEmail: email, studentName: 'N',
+  isActive: active, isCheckedIn: false,
+});
+
+await testEnv.clearFirestore();
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'admins', ADMIN_UID), { email: 'boss@seq.org' });
+
+  await setDoc(doc(db, 'students', ALICE_DOC), {
+    email: ALICE_EMAIL, displayName: 'Alice', isWhitelisted: true, fcmToken: 'tok-alice',
+  });
+  await setDoc(doc(db, 'students', MALLORY_DOC), {
+    email: MALLORY_EMAIL, displayName: 'Mallory', isWhitelisted: true,
+  });
+  await setDoc(doc(db, 'students', GHOST_DOC), {
+    email: GHOST_EMAIL, displayName: 'Ghost', isWhitelisted: false,
+  });
+
+  // hours stored as an integer, the way the dashboard writes it
+  await setDoc(doc(db, 'events', EVENT_ACTIVE), {
+    title: 'Rally', task: 'Setup', date: '2026-01-01', time: '10:00',
+    location: 'Gym', isActive: true, hours: 2, positions: 0,
+  });
+  await setDoc(doc(db, 'events', EVENT_IDLE), {
+    title: 'Cleanup', task: 'Sweep', date: '2026-02-01', time: '09:00',
+    location: 'Quad', isActive: false, hours: 3, positions: 0,
+  });
+  await setDoc(doc(db, 'events', 'evt-spare'), {
+    title: 'Spare', task: 'x', date: '2026-03-01', time: '09:00',
+    location: 'X', isActive: true, hours: 1, positions: 0,
+  });
+
+  // Sign-ups are created by POST /api/signup with Admin SDK credentials, so
+  // seed them the same way here.
+  await setDoc(doc(db, 'signups', ALICE_SIGNUP),
+    signupDoc(EVENT_ACTIVE, ALICE_UID, ALICE_EMAIL, 2, true));
+  await setDoc(doc(db, 'signups', MALLORY_SIGNUP),
+    signupDoc(EVENT_IDLE, MALLORY_UID, MALLORY_EMAIL, 3, false));
+  await setDoc(doc(db, 'signups', ALICE_SPARE),
+    signupDoc('evt-spare', ALICE_UID, ALICE_EMAIL, 1, true));
+});
+
+const alice = testEnv.authenticatedContext(ALICE_UID, { email: ALICE_EMAIL }).firestore();
+const mallory = testEnv.authenticatedContext(MALLORY_UID, { email: MALLORY_EMAIL }).firestore();
+const ghost = testEnv.authenticatedContext(GHOST_UID, { email: GHOST_EMAIL }).firestore();
+const staff = testEnv.authenticatedContext(STAFF_UID, { email: STAFF_EMAIL }).firestore();
+const adminDb = testEnv.authenticatedContext(ADMIN_UID, { email: 'boss@seq.org' }).firestore();
+const anon = testEnv.unauthenticatedContext().firestore();
+
+// ── Test runner ─────────────────────────────────────────────────────────────
+let pass = 0, fail = 0;
+async function check(name, fn) {
+  try { await fn(); console.log(`  ok   ${name}`); pass++; }
+  catch (e) { console.log(`  FAIL ${name}\n       ${e.message.split('\n')[0]}`); fail++; }
+}
+
+console.log('\nEvents');
+await check('anonymous cannot read events', () =>
+  assertFails(getDoc(doc(anon, 'events', EVENT_ACTIVE))));
+await check('signed-in student can read events', () =>
+  assertSucceeds(getDoc(doc(alice, 'events', EVENT_ACTIVE))));
+await check('student cannot create an event', () =>
+  assertFails(setDoc(doc(alice, 'events', 'forged'), { title: 'x', hours: 99 })));
+await check('student cannot flip isActive on an event', () =>
+  assertFails(updateDoc(doc(alice, 'events', EVENT_IDLE), { isActive: true })));
+await check('admin can create an event', () =>
+  assertSucceeds(setDoc(doc(adminDb, 'events', 'by-admin'), { title: 'x', hours: 1, isActive: false })));
+
+console.log('\nStudent roster (PII)');
+await check('student can read own record', () =>
+  assertSucceeds(getDoc(doc(alice, 'students', ALICE_DOC))));
+await check('student CANNOT read another student record', () =>
+  assertFails(getDoc(doc(alice, 'students', MALLORY_DOC))));
+await check('student CANNOT list the whole roster', () =>
+  assertFails(getDocs(collection(alice, 'students'))));
+await check('admin can list the roster', () =>
+  assertSucceeds(getDocs(collection(adminDb, 'students'))));
+await check('student can save own fcmToken', () =>
+  assertSucceeds(updateDoc(doc(alice, 'students', ALICE_DOC), { fcmToken: 'new' })));
+await check('student CANNOT re-whitelist themselves', () =>
+  assertFails(updateDoc(doc(ghost, 'students', GHOST_DOC), { isWhitelisted: true })));
+await check('student CANNOT change their own email', () =>
+  assertFails(updateDoc(doc(alice, 'students', ALICE_DOC), { email: 'other@seq.org' })));
+
+console.log('\nSignups (creation is server-only)');
+await check('student CANNOT create a signup directly, even a well-formed one', () =>
+  assertFails(setDoc(doc(mallory, 'signups', sid(EVENT_ACTIVE, MALLORY_UID)),
+    signupDoc(EVENT_ACTIVE, MALLORY_UID, MALLORY_EMAIL, 2, true))));
+await check('student CANNOT create a signup with inflated hours', () =>
+  assertFails(setDoc(doc(mallory, 'signups', sid(EVENT_ACTIVE, MALLORY_UID)),
+    signupDoc(EVENT_ACTIVE, MALLORY_UID, MALLORY_EMAIL, 500, true))));
+await check('admin CANNOT bypass the endpoint from the browser either', () =>
+  assertFails(setDoc(doc(adminDb, 'signups', 'admin-forged'),
+    signupDoc(EVENT_ACTIVE, ADMIN_UID, 'boss@seq.org', 2, true))));
+await check('student can read own signup', () =>
+  assertSucceeds(getDoc(doc(alice, 'signups', ALICE_SIGNUP))));
+await check('student CANNOT read another student signup', () =>
+  assertFails(getDoc(doc(mallory, 'signups', ALICE_SIGNUP))));
+await check('student CANNOT rewrite eventHours on own signup', () =>
+  assertFails(updateDoc(doc(alice, 'signups', ALICE_SIGNUP), { eventHours: 99 })));
+await check('student CANNOT rewrite studentUid on own signup', () =>
+  assertFails(updateDoc(doc(alice, 'signups', ALICE_SIGNUP), { studentUid: MALLORY_UID })));
+await check('student CANNOT flip isCheckedIn on an inactive event', () =>
+  assertFails(updateDoc(doc(mallory, 'signups', MALLORY_SIGNUP), { isCheckedIn: true })));
+await check('student can flip isCheckedIn while the event is active', () =>
+  assertSucceeds(updateDoc(doc(alice, 'signups', ALICE_SIGNUP), { isCheckedIn: true })));
+await check('student can cancel (delete) own signup', () =>
+  assertSucceeds(deleteDoc(doc(alice, 'signups', ALICE_SPARE))));
+await check('student CANNOT delete another student signup', () =>
+  assertFails(deleteDoc(doc(mallory, 'signups', ALICE_SIGNUP))));
+
+console.log('\nCheck-ins (hour fraud)');
+const checkinFor = (signupId, evt, uid, email, hours) => ({
+  signupId, eventId: evt, studentUid: uid, studentEmail: email, hoursEarned: hours,
+});
+await check('student CANNOT invent hours on a check-in', () =>
+  assertFails(setDoc(doc(alice, 'checkins', ALICE_SIGNUP),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, ALICE_UID, ALICE_EMAIL, 500))));
+await check('student CANNOT check in with a random doc id', () =>
+  assertFails(setDoc(doc(alice, 'checkins', 'free-hours'),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, ALICE_UID, ALICE_EMAIL, 2))));
+await check('student CANNOT check in on another student signup', () =>
+  assertFails(setDoc(doc(mallory, 'checkins', ALICE_SIGNUP),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, MALLORY_UID, MALLORY_EMAIL, 2))));
+await check('de-whitelisted student CANNOT check in', () =>
+  assertFails(setDoc(doc(ghost, 'checkins', ALICE_SIGNUP),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, GHOST_UID, GHOST_EMAIL, 2))));
+await check('student CANNOT check in before the admin activates the event', () =>
+  assertFails(setDoc(doc(mallory, 'checkins', MALLORY_SIGNUP),
+    checkinFor(MALLORY_SIGNUP, EVENT_IDLE, MALLORY_UID, MALLORY_EMAIL, 3))));
+await check('student CAN check in legitimately (active event, real hours)', () =>
+  assertSucceeds(setDoc(doc(alice, 'checkins', ALICE_SIGNUP),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, ALICE_UID, ALICE_EMAIL, 2))));
+await check('student CANNOT check in twice for the same signup', () =>
+  assertFails(setDoc(doc(alice, 'checkins', ALICE_SIGNUP),
+    checkinFor(ALICE_SIGNUP, EVENT_ACTIVE, ALICE_UID, ALICE_EMAIL, 2))));
+await check('student CANNOT edit their own check-in afterwards', () =>
+  assertFails(updateDoc(doc(alice, 'checkins', ALICE_SIGNUP), { hoursEarned: 99 })));
+await check('student CANNOT delete their own check-in', () =>
+  assertFails(deleteDoc(doc(alice, 'checkins', ALICE_SIGNUP))));
+await check('student CANNOT read another student check-in', () =>
+  assertFails(getDoc(doc(mallory, 'checkins', ALICE_SIGNUP))));
+await check('staff demo account is still allowed past the whitelist gate', async () => {
+  // Seeded through the server path, then checked in from the app like a student.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'signups', sid(EVENT_ACTIVE, STAFF_UID)),
+      signupDoc(EVENT_ACTIVE, STAFF_UID, STAFF_EMAIL, 2, true));
+  });
+  await assertSucceeds(setDoc(doc(staff, 'checkins', sid(EVENT_ACTIVE, STAFF_UID)),
+    checkinFor(sid(EVENT_ACTIVE, STAFF_UID), EVENT_ACTIVE, STAFF_UID, STAFF_EMAIL, 2)));
+});
+
+console.log('\nAdmins collection');
+await check('student CANNOT read the admins list', () =>
+  assertFails(getDoc(doc(alice, 'admins', ADMIN_UID))));
+await check('nobody can write to admins, not even an admin', () =>
+  assertFails(setDoc(doc(adminDb, 'admins', 'new-admin'), { email: 'x' })));
+await check('admin can delete a check-in', () =>
+  assertSucceeds(deleteDoc(doc(adminDb, 'checkins', ALICE_SIGNUP))));
+
+console.log(`\n${pass} passed, ${fail} failed\n`);
+await testEnv.cleanup();
+process.exit(fail === 0 ? 0 : 1);

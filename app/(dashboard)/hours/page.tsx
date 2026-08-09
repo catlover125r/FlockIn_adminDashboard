@@ -372,7 +372,7 @@ export default function HoursPage() {
             </div>
             <h2 className="text-lg font-bold text-gray-900 mb-1">Delete Check-in?</h2>
             <p className="text-sm text-gray-500 mb-4">
-              This will permanently remove <span className="font-semibold text-gray-700">{confirmCheckin.studentName}</span>'s
+              This will permanently remove <span className="font-semibold text-gray-700">{confirmCheckin.studentName}</span>&apos;s
               check-in for <span className="font-semibold text-gray-700">{confirmCheckin.eventTitle}</span> ({confirmCheckin.hoursEarned}h).
               This cannot be undone.
             </p>

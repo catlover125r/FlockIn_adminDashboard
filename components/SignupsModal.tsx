@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getSignupsForEvent, deleteSignup } from '@/lib/firebase';
 import type { FlockEvent } from '@/lib/types';
 import { formatTimestamp } from '@/lib/types';
@@ -23,9 +23,16 @@ export default function SignupsModal({ event, onClose }: SignupsModalProps) {
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  const loadSignups = useCallback(async () => {
+    setLoading(true);
+    const data = await getSignupsForEvent(event.id);
+    setSignups(data as Signup[]);
+    setLoading(false);
+  }, [event.id]);
+
   useEffect(() => {
     loadSignups();
-  }, [event.id]);
+  }, [loadSignups]);
 
   // Close on Escape
   useEffect(() => {
@@ -33,13 +40,6 @@ export default function SignupsModal({ event, onClose }: SignupsModalProps) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
-
-  async function loadSignups() {
-    setLoading(true);
-    const data = await getSignupsForEvent(event.id);
-    setSignups(data as Signup[]);
-    setLoading(false);
-  }
 
   async function handleRemove(signupId: string) {
     setRemovingId(signupId);
