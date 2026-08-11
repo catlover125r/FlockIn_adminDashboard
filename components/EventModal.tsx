@@ -95,6 +95,19 @@ export default function EventModal({ open, event, onClose, onSave }: EventModalP
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  // Centre of the Sequoia High School campus. The check-in geofence is a fixed
+  // 200m radius in the iOS app (LocationManager.isWithin200m), which from here
+  // covers the campus.
+  function useSequoiaCampus() {
+    setForm((prev) => ({
+      ...prev,
+      latitude: '37.48434759456459',
+      longitude: '-122.23659223380763',
+      location: prev.location.trim() ? prev.location : 'Sequoia High School',
+    }));
+    setErrors((prev) => ({ ...prev, latitude: undefined, longitude: undefined }));
+  }
+
   function validate(): boolean {
     const newErrors: Partial<Record<keyof EventFormData, string>> = {};
     if (!form.title.trim()) newErrors.title = 'Title is required';
@@ -273,6 +286,22 @@ export default function EventModal({ open, event, onClose, onSave }: EventModalP
                 className={fieldClass(!!errors.longitude)}
               />
             </FormField>
+          </div>
+
+          {/* Presets */}
+          <div className="flex items-center gap-2 -mt-1">
+            <span className="text-xs text-gray-400">Preset:</span>
+            <button
+              type="button"
+              onClick={useSequoiaCampus}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              Sequoia campus
+            </button>
           </div>
         </form>
 
