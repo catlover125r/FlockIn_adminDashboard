@@ -6,7 +6,9 @@ export const metadata: Metadata = {
   title: 'Flock In — Admin Dashboard',
   description: 'School ASB Events Admin Dashboard',
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦</text></svg>",
+    // 64px copy of the crest; the full-size one is 864px and would be a heavy
+    // download for a favicon.
+    icon: '/icon.png',
   },
 };
 

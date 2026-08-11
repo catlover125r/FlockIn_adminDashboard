@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import {
@@ -167,52 +168,15 @@ export default function LoginPage() {
         {/* Logo card */}
         <div className="flex flex-col items-center mb-8">
           {/* App icon */}
-          <div
-            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-4 shadow-lg"
-            style={{
-              background: 'linear-gradient(145deg, #8B5CF6 0%, #7C3AED 100%)',
-              boxShadow: '0 8px 32px rgba(139,92,246,0.35)',
-            }}
-          >
-            <svg
-              width="40"
-              height="40"
-              viewBox="0 0 40 40"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Three person silhouettes */}
-              {/* Center person */}
-              <circle cx="20" cy="13" r="5" fill="white" />
-              <path
-                d="M11 33c0-4.97 4.03-9 9-9s9 4.03 9 9"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                fill="none"
-              />
-              {/* Left person */}
-              <circle cx="9" cy="15" r="4" fill="white" fillOpacity="0.7" />
-              <path
-                d="M1 33c0-4.42 3.58-8 8-8"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                fill="none"
-                strokeOpacity="0.7"
-              />
-              {/* Right person */}
-              <circle cx="31" cy="15" r="4" fill="white" fillOpacity="0.7" />
-              <path
-                d="M39 33c0-4.42-3.58-8-8-8"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                fill="none"
-                strokeOpacity="0.7"
-              />
-            </svg>
-          </div>
+          <Image
+            src="/sequoia-logo.png"
+            alt="Sequoia High School"
+            width={96}
+            height={96}
+            priority
+            className="w-24 h-24 mb-4"
+            style={{ filter: 'drop-shadow(0 8px 24px rgba(76,29,110,0.25))' }}
+          />
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Flock In</h1>
           <p className="text-gray-500 text-sm mt-1 font-medium">Admin Dashboard</p>
         </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 
@@ -85,22 +86,17 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{
-            background: 'linear-gradient(145deg, #8B5CF6 0%, #7C3AED 100%)',
-            boxShadow: '0 2px 8px rgba(139,92,246,0.3)',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="20" cy="13" r="5" fill="white" />
-            <path d="M11 33c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-            <circle cx="9" cy="15" r="4" fill="white" fillOpacity="0.65" />
-            <path d="M1 33c0-4.42 3.58-8 8-8" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" strokeOpacity="0.65" />
-            <circle cx="31" cy="15" r="4" fill="white" fillOpacity="0.65" />
-            <path d="M39 33c0-4.42-3.58-8-8-8" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" strokeOpacity="0.65" />
-          </svg>
-        </div>
+        {/* The crest is already a circular badge on transparency, so it sits on
+            the sidebar directly rather than inside the tinted tile the old mark
+            needed. */}
+        <Image
+          src="/sequoia-logo.png"
+          alt="Sequoia High School"
+          width={36}
+          height={36}
+          priority
+          className="w-9 h-9 flex-shrink-0"
+        />
         <div>
           <div className="font-bold text-gray-900 text-sm leading-tight">Flock In</div>
           <div className="text-xs text-gray-400 leading-tight">Admin Dashboard</div>
