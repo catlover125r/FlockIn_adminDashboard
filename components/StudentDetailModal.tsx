@@ -18,10 +18,7 @@ interface Props {
   onChanged: () => void;
 }
 
-type Tab = 'hours' | 'signups';
-
 export default function StudentDetailModal({ student, onClose, onChanged }: Props) {
-  const [tab, setTab] = useState<Tab>('hours');
   const [signups, setSignups] = useState<Signup[]>([]);
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +50,6 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
 
   useEffect(() => {
     if (!student) return;
-    setTab('hours');
     setTitle('');
     setHours('');
     setError(null);
@@ -138,23 +134,6 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 px-6 pt-3 border-b border-gray-100">
-          {(['hours', 'signups'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                tab === t
-                  ? 'border-violet-600 text-violet-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t === 'hours' ? `Hours (${checkins.length})` : `Sign-ups (${signups.length})`}
-            </button>
-          ))}
-        </div>
-
         {/* Body */}
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {loading ? (
@@ -164,10 +143,10 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             </div>
-          ) : tab === 'hours' ? (
+          ) : (
             <>
               {/* Award form */}
-              <form onSubmit={handleAward} className="bg-violet-50 rounded-xl p-4 mb-4">
+              <form onSubmit={handleAward} className="bg-violet-50 rounded-xl p-4">
                 <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-3">
                   Award hours
                 </p>
@@ -206,8 +185,10 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
                 </p>
               </form>
 
+              {/* Hours */}
+              <SectionHeading label="Hours" count={checkins.length} />
               {checkins.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-8">No hours yet.</p>
+                <p className="text-sm text-gray-400 py-3">No hours yet.</p>
               ) : (
                 <div className="space-y-2">
                   {checkins.map((checkin) => (
@@ -247,40 +228,46 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
                   ))}
                 </div>
               )}
-            </>
-          ) : signups.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-12">No sign-ups found.</p>
-          ) : (
-            <div className="space-y-3">
-              {signups.map((signup) => (
-                <div
-                  key={signup.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-gray-900">{signup.eventTitle}</span>
-                      {signup.isCheckedIn && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-violet-100 text-violet-700">
-                          Checked In
-                        </span>
-                      )}
+
+              {/* Sign-ups */}
+              <SectionHeading label="Sign-ups" count={signups.length} />
+              {signups.length === 0 ? (
+                <p className="text-sm text-gray-400 py-3">No sign-ups yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {signups.map((signup) => (
+                    <div
+                      key={signup.id}
+                      className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-gray-900">
+                            {signup.eventTitle}
+                          </span>
+                          {signup.isCheckedIn && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-violet-100 text-violet-700">
+                              Checked in
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {signup.eventTask ? `${signup.eventTask} · ` : ''}
+                          {signup.eventDate} · {signup.eventTime}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveSignup(signup.id)}
+                        disabled={removingId === signup.id}
+                        className="flex-shrink-0 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                      >
+                        {removingId === signup.id ? '…' : 'Remove'}
+                      </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{signup.eventTask}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {signup.eventDate} · {signup.eventTime}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveSignup(signup.id)}
-                    disabled={removingId === signup.id}
-                    className="ml-4 flex-shrink-0 px-3 py-1.5 text-xs font-medium text-red-500 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50"
-                  >
-                    {removingId === signup.id ? 'Removing…' : 'Remove'}
-                  </button>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -294,6 +281,15 @@ export default function StudentDetailModal({ student, onClose, onChanged }: Prop
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SectionHeading({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-baseline gap-2 mt-6 mb-2">
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</h3>
+      <span className="text-xs text-gray-300">{count}</span>
     </div>
   );
 }
