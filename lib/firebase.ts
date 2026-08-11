@@ -245,6 +245,31 @@ export async function deleteSignup(signupId: string) {
   await deleteDoc(doc(db, 'signups', signupId));
 }
 
+/**
+ * One student's check-ins. Deliberately unsorted in the query: pairing a
+ * where() with an orderBy() on a different field needs a composite index, and
+ * the result set here is one student's worth. Callers sort in memory.
+ */
+export async function getCheckinsByStudent(email: string) {
+  const snap = await getDocs(
+    query(collection(db, 'checkins'), where('studentEmail', '==', email))
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function deleteCheckin(checkinId: string) {
+  await deleteDoc(doc(db, 'checkins', checkinId));
+}
+
+/** Credits a student hours for work that never went through an event. */
+export async function grantHours(
+  email: string,
+  title: string,
+  hours: number
+): Promise<void> {
+  await unwrap(await requestAuthed('/api/hours', { method: 'POST', body: { email, title, hours } }));
+}
+
 export async function getSignupsByStudent(email: string) {
   const snap = await getDocs(
     query(collection(db, 'signups'), where('studentEmail', '==', email))

@@ -12,7 +12,7 @@ import type { Student } from '@/lib/types';
 import { formatDate, sanitizeEmail } from '@/lib/types';
 import StudentModal from '@/components/StudentModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import StudentSignupsModal from '@/components/StudentSignupsModal';
+import StudentDetailModal from '@/components/StudentDetailModal';
 
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
@@ -28,7 +28,7 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [csvUploading, setCsvUploading] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
-  const [signupsStudent, setSignupsStudent] = useState<Student | null>(null);
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
 
   function addToast(message: string, type: 'success' | 'error') {
     const id = Date.now();
@@ -51,6 +51,22 @@ export default function StudentsPage() {
       addToast('Failed to load students', 'error');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // Re-reads just the derived per-student numbers after the detail modal
+  // changes something. loadData() would do it too, but it flips `loading` and
+  // blanks the table behind the open modal.
+  const refreshTotals = useCallback(async () => {
+    try {
+      const [counts, hours] = await Promise.all([
+        getSignupCountsByStudent(),
+        getHoursByStudent(),
+      ]);
+      setSignupCounts(counts);
+      setHoursByStudent(hours);
+    } catch {
+      addToast('Failed to refresh totals', 'error');
     }
   }, []);
 
@@ -285,7 +301,12 @@ export default function StudentsPage() {
                         >
                           {student.displayName.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-sm text-gray-900">{student.displayName}</span>
+                        <button
+                          onClick={() => setDetailStudent(student)}
+                          className="font-medium text-sm text-gray-900 hover:text-violet-700 hover:underline underline-offset-2 text-left"
+                        >
+                          {student.displayName}
+                        </button>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{student.email}</td>
@@ -294,7 +315,7 @@ export default function StudentsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <button
-                        onClick={() => setSignupsStudent(student)}
+                        onClick={() => setDetailStudent(student)}
                         className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors cursor-pointer"
                       >
                         {signupCounts[student.email] ?? 0}
@@ -336,16 +357,11 @@ export default function StudentsPage() {
         onSave={handleAddStudent}
       />
 
-      {/* Student Signups Modal */}
-      <StudentSignupsModal
-        student={signupsStudent}
-        onClose={() => setSignupsStudent(null)}
-        onSignupDeleted={(email) => {
-          setSignupCounts((prev) => ({
-            ...prev,
-            [email]: Math.max(0, (prev[email] ?? 1) - 1),
-          }));
-        }}
+      {/* Student detail: hours, awards and sign-ups */}
+      <StudentDetailModal
+        student={detailStudent}
+        onClose={() => setDetailStudent(null)}
+        onChanged={refreshTotals}
       />
 
       {/* Remove Confirm Dialog */}

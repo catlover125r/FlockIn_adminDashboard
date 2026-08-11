@@ -54,12 +54,9 @@ export interface Checkin {
   studentName: string;
   checkedInAt: Timestamp | Date | string;
   hoursEarned: number;
-}
-
-export interface Admin {
-  uid: string;
-  email: string;
-  name: string;
+  /** Awarded by an admin from the student's page rather than earned at an event. */
+  isManual?: boolean;
+  awardedBy?: string;
 }
 
 export interface NotifyPayload {
