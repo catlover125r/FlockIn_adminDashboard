@@ -27,6 +27,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { adminDocId, isOwnerEmail } from './owner';
+import { normalizeRole, type AdminRole } from './roles';
 import type { Admin } from './types';
 
 // authDomain must stay on <project>.firebaseapp.com. Firebase's sign-in helper
@@ -100,25 +101,31 @@ export function onAuthChange(callback: (user: User | null) => void) {
 }
 
 /**
- * Whether this user may use the dashboard.
+ * This user's role, or null if they may not use the dashboard at all.
  *
  * Keyed by sanitized email rather than uid so the owner can grant access to
  * somebody who has not signed in yet. The owner short-circuits without a read
  * at all, which means a broken or empty /admins collection can never lock them
  * out of the page that repairs it.
  */
-export async function isAdmin(user: User): Promise<boolean> {
-  if (isOwnerEmail(user.email)) return true;
-  if (!user.email) return false;
+export async function getAdminRole(user: User): Promise<AdminRole | null> {
+  if (isOwnerEmail(user.email)) return 'admin';
+  if (!user.email) return null;
   try {
     const snap = await getDoc(doc(db, 'admins', adminDocId(user.email)));
-    return snap.exists();
+    if (!snap.exists()) return null;
+    return normalizeRole(snap.data().role);
   } catch {
     // A denied read means "not an admin" just as much as a missing document
     // does. Letting it throw put the raw "Missing or insufficient permissions"
     // on the login screen instead of the access-denied message.
-    return false;
+    return null;
   }
+}
+
+/** Whether this user may sign in to the dashboard at all — chairs included. */
+export async function isAdmin(user: User): Promise<boolean> {
+  return (await getAdminRole(user)) !== null;
 }
 
 /**
@@ -166,8 +173,18 @@ export async function getAdmins(): Promise<{
   return unwrap(await requestAuthed('/api/admins'));
 }
 
-export async function addAdmin(email: string, name: string): Promise<void> {
-  await unwrap(await requestAuthed('/api/admins', { method: 'POST', body: { email, name } }));
+export async function addAdmin(
+  email: string,
+  name: string,
+  role: AdminRole
+): Promise<void> {
+  await unwrap(
+    await requestAuthed('/api/admins', { method: 'POST', body: { email, name, role } })
+  );
+}
+
+export async function setAdminRole(id: string, role: AdminRole): Promise<void> {
+  await unwrap(await requestAuthed('/api/admins', { method: 'PATCH', body: { id, role } }));
 }
 
 export async function removeAdmin(id: string): Promise<void> {

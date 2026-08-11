@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDB } from '@/lib/firebaseAdmin';
 import admin from '@/lib/firebaseAdmin';
-import { requireAdmin } from '@/lib/requireAdmin';
+import { requireStaff } from '@/lib/requireAdmin';
 import { broadcastNotification } from '@/lib/notify';
 
 interface CreateEventBody {
@@ -19,8 +19,9 @@ interface CreateEventBody {
 
 export async function POST(req: NextRequest) {
   // Writes to /events with Admin SDK credentials, which bypass Firestore
-  // rules — the check has to happen here.
-  const auth = await requireAdmin(req);
+  // rules — the check has to happen here. requireStaff, not requireAdmin:
+  // creating events is the one thing a chair is for.
+  const auth = await requireStaff(req);
   if (!auth.ok) return auth.response;
 
   try {

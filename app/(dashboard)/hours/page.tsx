@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { getCheckins, deleteDoc, doc, db } from '@/lib/firebase';
 import type { Checkin } from '@/lib/types';
 import { formatTimestamp } from '@/lib/types';
+import { useRequireFullAdmin } from '@/components/AuthProvider';
 
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
@@ -15,6 +16,8 @@ interface StudentHours {
 }
 
 export default function HoursPage() {
+  // Chairs may only create events; send them to the page they can use.
+  useRequireFullAdmin();
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStudent, setFilterStudent] = useState('');

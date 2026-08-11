@@ -9,6 +9,7 @@ import {
 } from '@/lib/firebase';
 import type { FlockEvent, Student, Checkin } from '@/lib/types';
 import { formatTimestamp } from '@/lib/types';
+import { useRequireFullAdmin } from '@/components/AuthProvider';
 
 interface StatCardProps {
   title: string;
@@ -40,6 +41,8 @@ function StatCard({ title, value, icon, accent, loading }: StatCardProps) {
 }
 
 export default function DashboardOverviewPage() {
+  // Chairs may only create events; send them to the page they can use.
+  useRequireFullAdmin();
   const [events, setEvents] = useState<FlockEvent[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [recentCheckins, setRecentCheckins] = useState<Checkin[]>([]);

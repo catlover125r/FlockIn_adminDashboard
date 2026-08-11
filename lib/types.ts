@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import type { AdminRole } from './roles';
 
 export interface FlockEvent {
   id: string;
@@ -73,6 +74,7 @@ export interface Admin {
   id: string;           // sanitized email used as doc ID
   email: string;
   name: string;
+  role: AdminRole;
   addedBy?: string;
   addedAt?: string;     // ISO string; the API converts the Timestamp for us
 }

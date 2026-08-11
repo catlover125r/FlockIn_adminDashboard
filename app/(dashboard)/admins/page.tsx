@@ -1,22 +1,26 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { getAdmins, addAdmin, removeAdmin } from '@/lib/firebase';
+import { getAdmins, addAdmin, removeAdmin, setAdminRole } from '@/lib/firebase';
 import type { Admin } from '@/lib/types';
 import { formatTimestamp } from '@/lib/types';
-import { useAuth } from '@/components/AuthProvider';
+import { ADMIN_ROLES, roleLabel, type AdminRole } from '@/lib/roles';
+import { useAuth, useRequireFullAdmin } from '@/components/AuthProvider';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
 export default function AdminsPage() {
   const { isOwnerUser } = useAuth();
+  useRequireFullAdmin();
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [ownerEmail, setOwnerEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [newRole, setNewRole] = useState<AdminRole>('admin');
   const [adding, setAdding] = useState(false);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Admin | null>(null);
   const [removing, setRemoving] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -49,15 +53,36 @@ export default function AdminsPage() {
     if (adding) return;
     setAdding(true);
     try {
-      await addAdmin(email.trim(), name.trim());
-      addToast(`${email.trim()} can now sign in as an admin.`, 'success');
+      await addAdmin(email.trim(), name.trim(), newRole);
+      addToast(
+        `${email.trim()} can now sign in as ${roleLabel(newRole).toLowerCase() === 'chair' ? 'a chair' : 'an admin'}.`,
+        'success'
+      );
       setEmail('');
       setName('');
+      setNewRole('admin');
       await loadData();
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Could not add admin', 'error');
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleRoleChange(admin: Admin, role: AdminRole) {
+    if (role === admin.role) return;
+    setSavingRoleId(admin.id);
+    // Optimistic: the select should not snap back to the old value for the
+    // length of a round trip. loadData() below reconciles either way.
+    setAdmins((prev) => prev.map((a) => (a.id === admin.id ? { ...a, role } : a)));
+    try {
+      await setAdminRole(admin.id, role);
+      addToast(`${admin.email} is now ${role === 'chair' ? 'a chair' : 'an admin'}.`, 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Could not change role', 'error');
+    } finally {
+      setSavingRoleId(null);
+      await loadData();
     }
   }
 
@@ -123,20 +148,40 @@ export default function AdminsPage() {
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent"
             />
           </div>
+          <div className="min-w-[130px]">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Role
+            </label>
+            <select
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value as AdminRole)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent"
+            >
+              {ADMIN_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             type="submit"
             disabled={adding || !email.trim()}
             className="bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl px-5 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {adding ? 'Adding...' : 'Add admin'}
+            {adding ? 'Adding...' : 'Add'}
           </button>
         </form>
       )}
 
       {isOwnerUser && (
         <p className="text-xs text-gray-400 mb-6 -mt-2">
-          They do not need to have signed in before. Access takes effect the next
-          time they load the dashboard.
+          <span className="font-semibold text-gray-500">Admin</span> gets everything
+          you have except this page.{' '}
+          <span className="font-semibold text-gray-500">Chair</span> can only create
+          events — no roster, hours, or notifications. They do not need to have
+          signed in before; access takes effect the next time they load the
+          dashboard.
         </p>
       )}
 
@@ -155,6 +200,7 @@ export default function AdminsPage() {
                 <tr className="border-b border-gray-100">
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Name</th>
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Email</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Role</th>
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Added</th>
                   {isOwnerUser && (
                     <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Action</th>
@@ -177,6 +223,31 @@ export default function AdminsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{admin.email}</td>
+                    <td className="px-6 py-4">
+                      {/* The owner is a full admin by virtue of their address,
+                          which no stored role can override — so there is
+                          nothing here to change. */}
+                      {isOwnerRow(admin) ? (
+                        <span className="text-sm text-gray-500">Admin</span>
+                      ) : isOwnerUser ? (
+                        <select
+                          value={admin.role}
+                          disabled={savingRoleId === admin.id}
+                          onChange={(e) =>
+                            handleRoleChange(admin, e.target.value as AdminRole)
+                          }
+                          className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent disabled:opacity-50"
+                        >
+                          {ADMIN_ROLES.map((r) => (
+                            <option key={r.value} value={r.value}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm text-gray-500">{roleLabel(admin.role)}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                       {/* formatTimestamp passes strings through untouched, so
                           hand it a Date rather than a raw ISO string. */}

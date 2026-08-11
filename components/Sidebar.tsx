@@ -9,6 +9,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Chairs may only create events, so everything else is hidden from them. */
+  chairCanSee?: boolean;
 }
 
 function OverviewIcon() {
@@ -64,7 +66,7 @@ function AdminsIcon() {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Overview', icon: <OverviewIcon /> },
-  { href: '/events', label: 'Events', icon: <EventsIcon /> },
+  { href: '/events', label: 'Events', icon: <EventsIcon />, chairCanSee: true },
   { href: '/students', label: 'Students', icon: <StudentsIcon /> },
   { href: '/hours', label: 'Hours', icon: <HoursIcon /> },
   { href: '/admins', label: 'Admins', icon: <AdminsIcon /> },
@@ -72,7 +74,8 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, signOutUser } = useAuth();
+  const { user, signOutUser, isChairUser, isOwnerUser } = useAuth();
+  const visibleItems = isChairUser ? navItems.filter((i) => i.chairCanSee) : navItems;
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/';
@@ -105,7 +108,7 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -130,8 +133,14 @@ export default function Sidebar() {
       <div className="border-t border-gray-100 px-3 py-4">
         {user && (
           <div className="mb-2 px-3 py-2">
-            <div className="text-xs font-medium text-gray-700 truncate">
-              {user.displayName ?? 'Admin'}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-gray-700 truncate">
+                {user.displayName ?? 'Admin'}
+              </span>
+              {/* Says why a chair's sidebar is shorter than everyone else's. */}
+              <span className="flex-shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-500">
+                {isOwnerUser ? 'Owner' : isChairUser ? 'Chair' : 'Admin'}
+              </span>
             </div>
             <div className="text-xs text-gray-400 truncate">{user.email}</div>
           </div>

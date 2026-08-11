@@ -44,6 +44,17 @@ const ADMIN_DOC = 'boss_at_seq_org';
 const OWNER_UID = 'owner-uid';
 const OWNER_EMAIL = '818038@seq.org';
 
+// role: 'chair' — may create events and nothing else.
+const CHAIR_UID = 'chair-uid';
+const CHAIR_EMAIL = 'chair@seq.org';
+const CHAIR_DOC = 'chair_at_seq_org';
+
+// A row with no role field at all, as written before roles existed. Must be
+// treated as a full admin, the same way normalizeRole() defaults.
+const LEGACY_UID = 'legacy-uid';
+const LEGACY_EMAIL = 'legacy@seq.org';
+const LEGACY_DOC = 'legacy_at_seq_org';
+
 const EVENT_ACTIVE = 'evt-active';
 const EVENT_IDLE = 'evt-idle';
 
@@ -63,7 +74,9 @@ const signupDoc = (evt, uid, email, hours, active) => ({
 await testEnv.clearFirestore();
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
-  await setDoc(doc(db, 'admins', ADMIN_DOC), { email: ADMIN_EMAIL });
+  await setDoc(doc(db, 'admins', ADMIN_DOC), { email: ADMIN_EMAIL, role: 'admin' });
+  await setDoc(doc(db, 'admins', CHAIR_DOC), { email: CHAIR_EMAIL, role: 'chair' });
+  await setDoc(doc(db, 'admins', LEGACY_DOC), { email: LEGACY_EMAIL });
 
   await setDoc(doc(db, 'students', ALICE_DOC), {
     email: ALICE_EMAIL, displayName: 'Alice', isWhitelisted: true, fcmToken: 'tok-alice',
@@ -105,6 +118,8 @@ const ghost = testEnv.authenticatedContext(GHOST_UID, { email: GHOST_EMAIL }).fi
 const staff = testEnv.authenticatedContext(STAFF_UID, { email: STAFF_EMAIL }).firestore();
 const adminDb = testEnv.authenticatedContext(ADMIN_UID, { email: ADMIN_EMAIL }).firestore();
 const owner = testEnv.authenticatedContext(OWNER_UID, { email: OWNER_EMAIL }).firestore();
+const chair = testEnv.authenticatedContext(CHAIR_UID, { email: CHAIR_EMAIL }).firestore();
+const legacy = testEnv.authenticatedContext(LEGACY_UID, { email: LEGACY_EMAIL }).firestore();
 const anon = testEnv.unauthenticatedContext().firestore();
 
 // ── Test runner ─────────────────────────────────────────────────────────────
@@ -241,6 +256,46 @@ await check('impersonating the admin uid without their email grants nothing', ()
     doc(testEnv.authenticatedContext(ADMIN_UID, { email: MALLORY_EMAIL }).firestore(),
       'events', 'forged-by-uid'),
     { title: 'x', hours: 1, isActive: false })));
+
+console.log('\nChair role');
+await check('chair CAN create an event', () =>
+  assertSucceeds(setDoc(doc(chair, 'events', 'by-chair'),
+    { title: 'x', task: 'y', date: '2026-01-01', time: '10:00', location: 'Gym', hours: 1, isActive: false })));
+// Editing is how an event gets activated, which is what releases check-in.
+// "Create-only" has to mean create only, or a chair can grant hours at will.
+await check('chair CANNOT edit an event', () =>
+  assertFails(updateDoc(doc(chair, 'events', EVENT_IDLE), { title: 'renamed' })));
+await check('chair CANNOT activate an event', () =>
+  assertFails(updateDoc(doc(chair, 'events', EVENT_IDLE), { isActive: true })));
+await check('chair CANNOT delete an event', () =>
+  assertFails(deleteDoc(doc(chair, 'events', EVENT_IDLE))));
+await check('chair CANNOT read the student roster', () =>
+  assertFails(getDocs(collection(chair, 'students'))));
+await check('chair CANNOT read a single student record', () =>
+  assertFails(getDoc(doc(chair, 'students', ALICE_DOC))));
+await check('chair CANNOT read check-ins', () =>
+  assertFails(getDocs(collection(chair, 'checkins'))));
+await check('chair CANNOT write a check-in', () =>
+  assertFails(setDoc(doc(chair, 'checkins', 'forged-by-chair'),
+    { studentUid: CHAIR_UID, hoursEarned: 99, signupId: 'x', eventId: EVENT_ACTIVE })));
+await check('chair CANNOT read sign-ups', () =>
+  assertFails(getDocs(collection(chair, 'signups'))));
+await check('chair CANNOT read the admins list', () =>
+  assertFails(getDocs(collection(chair, 'admins'))));
+await check('chair CAN read their own admin row', () =>
+  assertSucceeds(getDoc(doc(chair, 'admins', CHAIR_DOC))));
+await check('chair CANNOT promote themselves', () =>
+  assertFails(updateDoc(doc(chair, 'admins', CHAIR_DOC), { role: 'admin' })));
+await check('chair can still read events', () =>
+  assertSucceeds(getDoc(doc(chair, 'events', EVENT_ACTIVE))));
+
+console.log('\nRole defaulting');
+await check('a row with no role field is a full admin', () =>
+  assertSucceeds(setDoc(doc(legacy, 'events', 'by-legacy'), { title: 'x', hours: 1, isActive: false })));
+await check('a row with no role field can read the roster', () =>
+  assertSucceeds(getDocs(collection(legacy, 'students'))));
+await check('a row with no role field can edit events', () =>
+  assertSucceeds(updateDoc(doc(legacy, 'events', EVENT_IDLE), { isActive: false })));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await testEnv.cleanup();

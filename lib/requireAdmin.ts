@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDB, getAdminAuth } from '@/lib/firebaseAdmin';
 import { adminDocId, isOwnerEmail } from '@/lib/owner';
+import { normalizeRole, type AdminRole } from '@/lib/roles';
 
 /**
- * Result of an admin check: either the verified caller, or the response to
- * return.
+ * Result of an access check: either the verified caller, or the response to
+ * return. `role` is the caller's effective role — the owner is always 'admin'.
  */
 type AdminCheck =
-  | { ok: true; uid: string; email: string }
+  | { ok: true; uid: string; email: string; role: AdminRole; isOwner: boolean }
   | { ok: false; response: NextResponse };
 
 /**
- * Verifies that the caller is a signed-in admin.
+ * Verifies the caller holds any row in /admins, and reports which role.
  *
  * These routes run with Admin SDK credentials, which bypass Firestore rules
  * entirely — so the rules are no defence here and the check has to happen in
  * the route itself. Callers send the Firebase ID token as a bearer token; we
- * verify the signature and then confirm the uid is present in /admins.
+ * verify the signature and then look the caller up in /admins by email.
+ *
+ * Use this only for things a chair may also do. Everything else wants
+ * requireAdmin.
  */
-export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
+export async function requireStaff(req: NextRequest): Promise<AdminCheck> {
   const header = req.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
 
@@ -35,7 +39,7 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
   try {
     adminAuth = getAdminAuth();
   } catch (error) {
-    console.error('[requireAdmin] Admin SDK unavailable:', error);
+    console.error('[requireStaff] Admin SDK unavailable:', error);
     return {
       ok: false,
       response: NextResponse.json({ error: 'server_misconfigured' }, { status: 500 }),
@@ -65,9 +69,11 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
     };
   }
 
-  // The owner is an admin unconditionally, so an empty or mangled /admins
+  // The owner is a full admin unconditionally, so an empty or mangled /admins
   // collection cannot lock the last person capable of repairing it out.
-  if (isOwnerEmail(email)) return { ok: true, uid, email };
+  if (isOwnerEmail(email)) {
+    return { ok: true, uid, email, role: 'admin', isOwner: true };
+  }
 
   const adminDoc = await getAdminDB().collection('admins').doc(adminDocId(email)).get();
   if (!adminDoc.exists) {
@@ -77,19 +83,46 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
     };
   }
 
-  return { ok: true, uid, email };
+  return {
+    ok: true,
+    uid,
+    email,
+    role: normalizeRole(adminDoc.data()?.role),
+    isOwner: false,
+  };
+}
+
+/**
+ * Verifies the caller is a full admin. Chairs are rejected: they may create
+ * events and nothing else, and every route guarded by this one touches student
+ * data or dashboard-wide state.
+ */
+export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
+  const check = await requireStaff(req);
+  if (!check.ok) return check;
+
+  if (check.role !== 'admin') {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Chairs can only create events.' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return check;
 }
 
 /**
  * Verifies the caller is the owner — the single account permitted to change who
- * is an admin. Everything else an admin can do is available to all admins; this
- * gate exists only for /admins writes.
+ * is an admin, and what role they hold.
  */
 export async function requireOwner(req: NextRequest): Promise<AdminCheck> {
   const check = await requireAdmin(req);
   if (!check.ok) return check;
 
-  if (!isOwnerEmail(check.email)) {
+  if (!check.isOwner) {
     return {
       ok: false,
       response: NextResponse.json(

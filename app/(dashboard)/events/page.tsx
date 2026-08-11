@@ -13,10 +13,15 @@ import { formatEventDate, formatEventTime } from '@/lib/types';
 import EventModal from '@/components/EventModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SignupsModal from '@/components/SignupsModal';
+import { useAuth } from '@/components/AuthProvider';
 
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
 export default function EventsPage() {
+  // Chairs may create events and nothing else — no editing, activating,
+  // deleting, sign-up lists or notifications. Firestore rules and the API
+  // routes enforce that; this only decides what is worth rendering.
+  const { isFullAdmin } = useAuth();
   const [events, setEvents] = useState<FlockEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -49,12 +54,18 @@ export default function EventsPage() {
         return new Date(year, month - 1, day, hour, min) <= now;
       });
 
-      for (const event of toActivate) {
-        await updateEvent(event.id, { isActive: true });
-        await sendNotification(`${event.title} is now active!`, 'You can check in now');
+      // Only full admins may write to /events. Attempting this as a chair
+      // throws on the first update and lands in the catch below, which would
+      // put "Failed to load events" on screen once a minute for a page that
+      // had in fact loaded fine.
+      if (isFullAdmin) {
+        for (const event of toActivate) {
+          await updateEvent(event.id, { isActive: true });
+          await sendNotification(`${event.title} is now active!`, 'You can check in now');
+        }
       }
 
-      const final = toActivate.length > 0
+      const final = toActivate.length > 0 && isFullAdmin
         ? (await getEvents()) as FlockEvent[]
         : data;
       setEvents(final);
@@ -63,7 +74,7 @@ export default function EventsPage() {
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }, []);
+  }, [isFullAdmin]);
 
   useEffect(() => {
     loadEvents();
@@ -210,9 +221,13 @@ export default function EventsPage() {
         <td className="px-6 py-4">
           <button
             onClick={() => handleToggleActive(event)}
-            disabled={togglingId === event.id}
-            className="flex items-center gap-2 group"
-            title={event.isActive ? 'Click to deactivate' : 'Click to activate'}
+            disabled={togglingId === event.id || !isFullAdmin}
+            className={`flex items-center gap-2 group ${isFullAdmin ? '' : 'cursor-default'}`}
+            title={
+              isFullAdmin
+                ? event.isActive ? 'Click to deactivate' : 'Click to activate'
+                : 'Only admins can activate events'
+            }
           >
             <span
               className={`toggle-track ${event.isActive ? 'on' : ''} ${togglingId === event.id ? 'opacity-50' : ''}`}
@@ -232,6 +247,7 @@ export default function EventsPage() {
         </td>
         <td className="px-6 py-4">
           <div className="flex items-center justify-end gap-2">
+            {isFullAdmin && (
             <button
               onClick={() => setSignupsEvent(event)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
@@ -242,6 +258,7 @@ export default function EventsPage() {
               </svg>
               Sign-ups
             </button>
+            )}
             <button
               onClick={() => handleDuplicate(event)}
               disabled={duplicatingId === event.id}
@@ -260,6 +277,8 @@ export default function EventsPage() {
               )}
               Duplicate
             </button>
+            {isFullAdmin && (
+              <>
             <button
               onClick={() => openEdit(event)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-violet-100 hover:text-violet-700 transition"
@@ -282,6 +301,8 @@ export default function EventsPage() {
               </svg>
               Delete
             </button>
+              </>
+            )}
           </div>
         </td>
       </tr>

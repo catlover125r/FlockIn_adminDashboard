@@ -13,10 +13,13 @@ import { formatDate, sanitizeEmail } from '@/lib/types';
 import StudentModal from '@/components/StudentModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import StudentDetailModal from '@/components/StudentDetailModal';
+import { useRequireFullAdmin } from '@/components/AuthProvider';
 
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
 export default function StudentsPage() {
+  // Chairs may only create events; send them to the page they can use.
+  useRequireFullAdmin();
   const [students, setStudents] = useState<Student[]>([]);
   const [signupCounts, setSignupCounts] = useState<Record<string, number>>({});
   const [hoursByStudent, setHoursByStudent] = useState<Record<string, number>>({});
