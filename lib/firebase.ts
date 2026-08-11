@@ -27,24 +27,23 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 
-// next.config.mjs reverse-proxies /__/auth/* to <project>.firebaseapp.com, so
-// the sign-in helper is available on whatever origin the app is being served
-// from. Pointing authDomain at that origin keeps the popup handshake
-// first-party; leaving it on firebaseapp.com makes it a cross-site iframe,
-// which Chrome's third-party storage blocking silently breaks — signInWithPopup
-// then hangs forever instead of failing.
+// authDomain must stay on <project>.firebaseapp.com. Firebase's sign-in helper
+// hands Google a redirect_uri of https://<authDomain>/__/auth/handler, and the
+// only value the project's OAuth client has registered is the firebaseapp.com
+// one. Setting this to window.location.host — an attempt to keep the popup
+// handshake first-party via a /__/auth/* reverse proxy — sent Google
+// https://flock-in-admin-dashboard.vercel.app/__/auth/handler and every sign-in
+// died on "Error 400: redirect_uri_mismatch".
 //
-// Every host reached this way still has to be listed under Firebase Console →
-// Authentication → Settings → Authorized domains. The env var is the value used
-// during SSR, where there is no window to read.
-const authDomain =
-  typeof window !== 'undefined'
-    ? window.location.host
-    : process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!;
-
+// Serving the helper first-party is still the right answer if popup sign-in
+// starts hanging under third-party storage blocking, but it takes a matching
+// console change: add the app's own /__/auth/handler URL to the OAuth 2.0 web
+// client in Google Cloud Console → Credentials, and the host to Firebase
+// Console → Authentication → Settings → Authorized domains. Do not point
+// authDomain anywhere the OAuth client does not already know about.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-  authDomain,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
@@ -73,10 +72,9 @@ export async function signInWithGoogle(): Promise<User> {
  * it never resolves — the result is picked up by completeRedirectSignIn() on
  * the way back in.
  *
- * This only works because /__/auth/* is proxied through our own origin (see
- * next.config.mjs); against the default firebaseapp.com authDomain the redirect
- * flow is the *more* fragile of the two, since it leans harder on third-party
- * storage surviving the round trip.
+ * Escape hatch only: with a cross-origin authDomain this leans on third-party
+ * storage surviving the round trip, so it is the more fragile of the two flows.
+ * Keep signInWithPopup as the primary path.
  */
 export async function signInWithGoogleRedirect(): Promise<void> {
   await signInWithRedirect(auth, googleProvider);
