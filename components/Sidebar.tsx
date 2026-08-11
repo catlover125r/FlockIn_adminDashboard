@@ -52,11 +52,21 @@ function HoursIcon() {
   );
 }
 
+function AdminsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l7 4v5c0 4.5-2.9 8.6-7 9.9C7.9 19.6 5 15.5 5 11V6l7-4z" />
+      <polyline points="9 11.5 11 13.5 15 9.5" />
+    </svg>
+  );
+}
+
 const navItems: NavItem[] = [
   { href: '/', label: 'Overview', icon: <OverviewIcon /> },
   { href: '/events', label: 'Events', icon: <EventsIcon /> },
   { href: '/students', label: 'Students', icon: <StudentsIcon /> },
   { href: '/hours', label: 'Hours', icon: <HoursIcon /> },
+  { href: '/admins', label: 'Admins', icon: <AdminsIcon /> },
 ];
 
 export default function Sidebar() {

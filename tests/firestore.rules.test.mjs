@@ -33,7 +33,16 @@ const GHOST_DOC = 'ghost_at_seq_org';
 const STAFF_UID = 'staff-uid';
 const STAFF_EMAIL = 'admin@flockin.local';
 
+// Admins are keyed by sanitized email, not uid, so the seed below is written at
+// the email-derived id and the uid here is deliberately unrelated to it.
 const ADMIN_UID = 'admin-uid';
+const ADMIN_EMAIL = 'boss@seq.org';
+const ADMIN_DOC = 'boss_at_seq_org';
+
+// The hardcoded owner from firestore.rules / lib/owner.ts. Deliberately given
+// no row in /admins, so the tests prove the short-circuit works on its own.
+const OWNER_UID = 'owner-uid';
+const OWNER_EMAIL = '818038@seq.org';
 
 const EVENT_ACTIVE = 'evt-active';
 const EVENT_IDLE = 'evt-idle';
@@ -54,7 +63,7 @@ const signupDoc = (evt, uid, email, hours, active) => ({
 await testEnv.clearFirestore();
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
-  await setDoc(doc(db, 'admins', ADMIN_UID), { email: 'boss@seq.org' });
+  await setDoc(doc(db, 'admins', ADMIN_DOC), { email: ADMIN_EMAIL });
 
   await setDoc(doc(db, 'students', ALICE_DOC), {
     email: ALICE_EMAIL, displayName: 'Alice', isWhitelisted: true, fcmToken: 'tok-alice',
@@ -94,7 +103,8 @@ const alice = testEnv.authenticatedContext(ALICE_UID, { email: ALICE_EMAIL }).fi
 const mallory = testEnv.authenticatedContext(MALLORY_UID, { email: MALLORY_EMAIL }).firestore();
 const ghost = testEnv.authenticatedContext(GHOST_UID, { email: GHOST_EMAIL }).firestore();
 const staff = testEnv.authenticatedContext(STAFF_UID, { email: STAFF_EMAIL }).firestore();
-const adminDb = testEnv.authenticatedContext(ADMIN_UID, { email: 'boss@seq.org' }).firestore();
+const adminDb = testEnv.authenticatedContext(ADMIN_UID, { email: ADMIN_EMAIL }).firestore();
+const owner = testEnv.authenticatedContext(OWNER_UID, { email: OWNER_EMAIL }).firestore();
 const anon = testEnv.unauthenticatedContext().firestore();
 
 // ── Test runner ─────────────────────────────────────────────────────────────
@@ -202,11 +212,35 @@ await check('staff demo account is still allowed past the whitelist gate', async
 
 console.log('\nAdmins collection');
 await check('student CANNOT read the admins list', () =>
-  assertFails(getDoc(doc(alice, 'admins', ADMIN_UID))));
+  assertFails(getDoc(doc(alice, 'admins', ADMIN_DOC))));
+await check('student CAN read their own (absent) admin row', () =>
+  assertSucceeds(getDoc(doc(alice, 'admins', ALICE_DOC))));
+await check('admin CAN read the admins list', () =>
+  assertSucceeds(getDocs(collection(adminDb, 'admins'))));
 await check('nobody can write to admins, not even an admin', () =>
   assertFails(setDoc(doc(adminDb, 'admins', 'new-admin'), { email: 'x' })));
 await check('admin can delete a check-in', () =>
   assertSucceeds(deleteDoc(doc(adminDb, 'checkins', ALICE_SIGNUP))));
+
+console.log('\nOwner');
+await check('owner is an admin with no row in /admins at all', () =>
+  assertSucceeds(setDoc(doc(owner, 'events', 'by-owner'), { title: 'x', hours: 1, isActive: false })));
+await check('owner CAN read the admins list', () =>
+  assertSucceeds(getDocs(collection(owner, 'admins'))));
+// The owner-only write path is /api/admins, which runs with Admin SDK
+// credentials. The browser must not be able to shortcut it, or an XSS on the
+// dashboard could appoint admins straight out of the owner's own session.
+await check('owner CANNOT write to admins from the browser', () =>
+  assertFails(setDoc(doc(owner, 'admins', 'sneaky_at_seq_org'), { email: 'sneaky@seq.org' })));
+await check('owner CANNOT delete an admin from the browser', () =>
+  assertFails(deleteDoc(doc(owner, 'admins', ADMIN_DOC))));
+// Admin identity is the email claim, not the uid: a uid that happens to match
+// nothing and an unrelated email must not inherit anyone's access.
+await check('impersonating the admin uid without their email grants nothing', () =>
+  assertFails(setDoc(
+    doc(testEnv.authenticatedContext(ADMIN_UID, { email: MALLORY_EMAIL }).firestore(),
+      'events', 'forged-by-uid'),
+    { title: 'x', hours: 1, isActive: false })));
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 await testEnv.cleanup();

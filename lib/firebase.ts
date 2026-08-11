@@ -26,6 +26,8 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
+import { adminDocId, isOwnerEmail } from './owner';
+import type { Admin } from './types';
 
 // authDomain must stay on <project>.firebaseapp.com. Firebase's sign-in helper
 // hands Google a redirect_uri of https://<authDomain>/__/auth/handler, and the
@@ -97,9 +99,19 @@ export function onAuthChange(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
 
-export async function isAdmin(uid: string): Promise<boolean> {
+/**
+ * Whether this user may use the dashboard.
+ *
+ * Keyed by sanitized email rather than uid so the owner can grant access to
+ * somebody who has not signed in yet. The owner short-circuits without a read
+ * at all, which means a broken or empty /admins collection can never lock them
+ * out of the page that repairs it.
+ */
+export async function isAdmin(user: User): Promise<boolean> {
+  if (isOwnerEmail(user.email)) return true;
+  if (!user.email) return false;
   try {
-    const snap = await getDoc(doc(db, 'admins', uid));
+    const snap = await getDoc(doc(db, 'admins', adminDocId(user.email)));
     return snap.exists();
   } catch {
     // A denied read means "not an admin" just as much as a missing document
@@ -110,22 +122,58 @@ export async function isAdmin(uid: string): Promise<boolean> {
 }
 
 /**
- * POSTs JSON to one of our API routes with the signed-in user's Firebase ID
- * token attached. Those routes run with Admin SDK credentials, so they verify
- * this token themselves rather than relying on Firestore rules.
+ * Calls one of our API routes with the signed-in user's Firebase ID token
+ * attached. Those routes run with Admin SDK credentials, so they verify this
+ * token themselves rather than relying on Firestore rules.
  */
-export async function postAuthed(path: string, body: unknown): Promise<Response> {
+export async function requestAuthed(
+  path: string,
+  init: { method: string; body?: unknown } = { method: 'GET' }
+): Promise<Response> {
   const user = auth.currentUser;
   if (!user) throw new Error('Not signed in');
   const token = await user.getIdToken();
   return fetch(path, {
-    method: 'POST',
+    method: init.method,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(body),
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
+}
+
+export async function postAuthed(path: string, body: unknown): Promise<Response> {
+  return requestAuthed(path, { method: 'POST', body });
+}
+
+/** Surfaces the API route's own error text, which is written to be shown. */
+async function unwrap<T>(res: Response): Promise<T> {
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((payload as { error?: string }).error ?? 'Request failed');
+  }
+  return payload as T;
+}
+
+// ── Admins ───────────────────────────────────────────────────────────────────
+
+export async function getAdmins(): Promise<{
+  admins: Admin[];
+  ownerEmail: string;
+  isOwner: boolean;
+}> {
+  return unwrap(await requestAuthed('/api/admins'));
+}
+
+export async function addAdmin(email: string, name: string): Promise<void> {
+  await unwrap(await requestAuthed('/api/admins', { method: 'POST', body: { email, name } }));
+}
+
+export async function removeAdmin(id: string): Promise<void> {
+  await unwrap(
+    await requestAuthed(`/api/admins?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  );
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────

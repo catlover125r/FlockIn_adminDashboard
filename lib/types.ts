@@ -72,6 +72,14 @@ export interface NotifyResponse {
   failed: number;
 }
 
+export interface Admin {
+  id: string;           // sanitized email used as doc ID
+  email: string;
+  name: string;
+  addedBy?: string;
+  addedAt?: string;     // ISO string; the API converts the Timestamp for us
+}
+
 // Helper to sanitize email for Firestore doc ID
 export function sanitizeEmail(email: string): string {
   return email.replace('@', '_at_').replace(/\./g, '_');

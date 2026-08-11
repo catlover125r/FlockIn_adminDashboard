@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDB, getAdminAuth } from '@/lib/firebaseAdmin';
+import { adminDocId, isOwnerEmail } from '@/lib/owner';
 
 /**
- * Result of an admin check: either the verified uid, or the response to return.
+ * Result of an admin check: either the verified caller, or the response to
+ * return.
  */
 type AdminCheck =
-  | { ok: true; uid: string }
+  | { ok: true; uid: string; email: string }
   | { ok: false; response: NextResponse };
 
 /**
@@ -41,11 +43,21 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
   }
 
   let uid: string;
+  let email: string;
   try {
     // checkRevoked: a signed-out or disabled admin must stop working immediately,
     // not when their hour-long token happens to expire.
     const decoded = await adminAuth.verifyIdToken(token, true);
+    if (!decoded.email) {
+      // Admin identity is keyed by email, so a token without one can never
+      // match a row no matter what uid it carries.
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+      };
+    }
     uid = decoded.uid;
+    email = decoded.email.toLowerCase();
   } catch {
     return {
       ok: false,
@@ -53,7 +65,11 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
     };
   }
 
-  const adminDoc = await getAdminDB().collection('admins').doc(uid).get();
+  // The owner is an admin unconditionally, so an empty or mangled /admins
+  // collection cannot lock the last person capable of repairing it out.
+  if (isOwnerEmail(email)) return { ok: true, uid, email };
+
+  const adminDoc = await getAdminDB().collection('admins').doc(adminDocId(email)).get();
   if (!adminDoc.exists) {
     return {
       ok: false,
@@ -61,5 +77,27 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
     };
   }
 
-  return { ok: true, uid };
+  return { ok: true, uid, email };
+}
+
+/**
+ * Verifies the caller is the owner — the single account permitted to change who
+ * is an admin. Everything else an admin can do is available to all admins; this
+ * gate exists only for /admins writes.
+ */
+export async function requireOwner(req: NextRequest): Promise<AdminCheck> {
+  const check = await requireAdmin(req);
+  if (!check.ok) return check;
+
+  if (!isOwnerEmail(check.email)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Only the owner can change the admin list.' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return check;
 }

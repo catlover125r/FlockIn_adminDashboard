@@ -80,7 +80,7 @@ export default function LoginPage() {
   // out so a non-admin Google session is not left lying around.
   const admit = useCallback(
     async (firebaseUser: User) => {
-      if (await isAdmin(firebaseUser.uid)) {
+      if (await isAdmin(firebaseUser)) {
         router.replace('/');
         return;
       }
