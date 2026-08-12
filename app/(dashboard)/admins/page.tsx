@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { getAdmins, addAdmin, removeAdmin, setAdminRole } from '@/lib/firebase';
 import type { Admin } from '@/lib/types';
 import { formatTimestamp } from '@/lib/types';
-import { ADMIN_ROLES, roleLabel, type AdminRole } from '@/lib/roles';
+import { ADMIN_ROLES, ROLE_BADGE_CLASS, roleLabel, type AdminRole } from '@/lib/roles';
 import { useAuth, useRequireFullAdmin } from '@/components/AuthProvider';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
@@ -155,7 +155,7 @@ export default function AdminsPage() {
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as AdminRole)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent"
+              className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-400 ${ROLE_BADGE_CLASS[newRole]}`}
             >
               {ADMIN_ROLES.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -228,7 +228,11 @@ export default function AdminsPage() {
                           which no stored role can override — so there is
                           nothing here to change. */}
                       {isOwnerRow(admin) ? (
-                        <span className="text-sm text-gray-500">Admin</span>
+                        <span
+                          className={`inline-block border rounded-lg px-2.5 py-1.5 text-sm font-medium ${ROLE_BADGE_CLASS.admin}`}
+                        >
+                          Admin
+                        </span>
                       ) : isOwnerUser ? (
                         <select
                           value={admin.role}
@@ -236,7 +240,7 @@ export default function AdminsPage() {
                           onChange={(e) =>
                             handleRoleChange(admin, e.target.value as AdminRole)
                           }
-                          className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent disabled:opacity-50"
+                          className={`border rounded-lg px-2.5 py-1.5 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50 ${ROLE_BADGE_CLASS[admin.role]}`}
                         >
                           {ADMIN_ROLES.map((r) => (
                             <option key={r.value} value={r.value}>
@@ -245,7 +249,11 @@ export default function AdminsPage() {
                           ))}
                         </select>
                       ) : (
-                        <span className="text-sm text-gray-500">{roleLabel(admin.role)}</span>
+                        <span
+                          className={`inline-block border rounded-lg px-2.5 py-1.5 text-sm font-medium ${ROLE_BADGE_CLASS[admin.role]}`}
+                        >
+                          {roleLabel(admin.role)}
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">

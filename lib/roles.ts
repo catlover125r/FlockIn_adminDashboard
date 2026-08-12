@@ -30,3 +30,16 @@ export function normalizeRole(value: unknown): AdminRole {
 export function roleLabel(role: AdminRole): string {
   return ADMIN_ROLES.find((r) => r.value === role)?.label ?? 'Admin';
 }
+
+/**
+ * Colour per role: admin in light purple, chair in light grey. Kept here so the
+ * table, the dropdown and the sidebar badge cannot drift apart.
+ *
+ * These are literal class names on purpose — Tailwind scans for them as text,
+ * so they can never be assembled from fragments at runtime. tailwind.config.ts
+ * includes lib/ in `content` for this file specifically.
+ */
+export const ROLE_BADGE_CLASS: Record<AdminRole, string> = {
+  admin: 'bg-violet-100 text-violet-700 border-violet-200',
+  chair: 'bg-gray-100 text-gray-600 border-gray-300',
+};

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
+import { ROLE_BADGE_CLASS } from '@/lib/roles';
 
 interface NavItem {
   href: string;
@@ -137,8 +138,13 @@ export default function Sidebar() {
               <span className="text-xs font-medium text-gray-700 truncate">
                 {user.displayName ?? 'Admin'}
               </span>
-              {/* Says why a chair's sidebar is shorter than everyone else's. */}
-              <span className="flex-shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-500">
+              {/* Says why a chair's sidebar is shorter than everyone else's.
+                  Same palette as the Role column on the Admins page. */}
+              <span
+                className={`flex-shrink-0 px-1.5 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${
+                  ROLE_BADGE_CLASS[isChairUser ? 'chair' : 'admin']
+                }`}
+              >
                 {isOwnerUser ? 'Owner' : isChairUser ? 'Chair' : 'Admin'}
               </span>
             </div>
