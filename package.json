@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:rules": "firebase emulators:exec --only firestore --project flockin-rules-test --config ../firebase.json \"node tests/firestore.rules.test.mjs\""
+    "test:rules": "firebase emulators:exec --only firestore --project flockin-rules-test \"node tests/firestore.rules.test.mjs\"",
+    "deploy:rules": "firebase deploy --only firestore:rules --project flockin-eee84"
   },
   "dependencies": {
     "next": "14.2.0",

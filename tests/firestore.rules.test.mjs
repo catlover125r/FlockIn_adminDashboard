@@ -9,8 +9,9 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
 } from 'firebase/firestore';
 
-// ../../firestore.rules — the file that gets pasted into the Firebase console.
-const RULES = fileURLToPath(new URL('../../firestore.rules', import.meta.url));
+// ../firestore.rules — the deployed ruleset, kept in this repository rather
+// than the public one because it hardcodes the owner's email address.
+const RULES = fileURLToPath(new URL('../firestore.rules', import.meta.url));
 
 const testEnv = await initializeTestEnvironment({
   projectId: 'flockin-rules-test',
