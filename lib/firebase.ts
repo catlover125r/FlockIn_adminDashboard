@@ -231,11 +231,17 @@ export async function createEvent(data: Record<string, unknown>) {
 }
 
 /**
- * Authorship for every event, as a map of event ID to record. Admin-only —
- * a chair calling this gets a permission error, so guard the call site.
+ * Authorship records, as a map of event ID to record.
+ *
+ * Pass `createdBy` to fetch only one person's. A chair must do this — the rules
+ * only permit them to read their own rows, and an unfiltered list would be
+ * rejected outright rather than silently trimmed.
  */
-export async function getEventMeta(): Promise<Record<string, EventMeta>> {
-  const snap = await getDocs(collection(db, 'eventMeta'));
+export async function getEventMeta(createdBy?: string): Promise<Record<string, EventMeta>> {
+  const ref = collection(db, 'eventMeta');
+  const snap = await getDocs(
+    createdBy ? query(ref, where('createdBy', '==', createdBy)) : ref
+  );
   const byId: Record<string, EventMeta> = {};
   snap.docs.forEach((d) => {
     const data = d.data();

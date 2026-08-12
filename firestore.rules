@@ -128,7 +128,17 @@ service cloud.firestore {
     // collection is the only way to record this and still keep it from
     // students.
     match /eventMeta/{eventId} {
-      allow read: if isAdmin();
+      // Admins see the whole log. A chair sees only their own rows, which is
+      // what lets the dashboard show them just the events they created — they
+      // have to query where('createdBy','==',<their own email>) for a list to
+      // be allowed at all.
+      //
+      // This narrows the authorship log, not the events themselves. /events is
+      // readable by every signed-in user because the student app depends on it,
+      // and chairs are students, so hiding other people's events in the
+      // dashboard is tidiness rather than a boundary.
+      allow read: if isAdmin()
+        || (isChair() && resource.data.createdBy == tokenEmail());
 
       // Written by whoever creates the event, chairs included — they are the
       // main reason this log exists. createdBy is pinned to the caller's own

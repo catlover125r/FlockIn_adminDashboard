@@ -6,7 +6,7 @@ import {
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where,
 } from 'firebase/firestore';
 
 // ../firestore.rules — the deployed ruleset, kept in this repository rather
@@ -307,8 +307,18 @@ await check('chair CAN record themselves as author', () =>
 await check('chair CANNOT attribute an event to somebody else', () =>
   assertFails(setDoc(doc(chair, 'eventMeta', 'forged'),
     { createdBy: ADMIN_EMAIL, createdByName: 'Boss', createdAt: new Date() })));
-await check('chair CANNOT read the authorship log', () =>
+await check('chair CANNOT read the whole authorship log', () =>
   assertFails(getDocs(collection(chair, 'eventMeta'))));
+// How the dashboard shows a chair only their own events: the query has to name
+// them, and the rules only allow it because of that constraint.
+await check('chair CAN list their own authorship rows', () =>
+  assertSucceeds(getDocs(query(collection(chair, 'eventMeta'),
+    where('createdBy', '==', CHAIR_EMAIL)))));
+await check('chair CANNOT list somebody else\'s authorship rows', () =>
+  assertFails(getDocs(query(collection(chair, 'eventMeta'),
+    where('createdBy', '==', ADMIN_EMAIL)))));
+await check('chair CAN read a single row they authored', () =>
+  assertSucceeds(getDoc(doc(chair, 'eventMeta', 'by-chair'))));
 await check('chair CANNOT rewrite an existing authorship record', () =>
   assertFails(updateDoc(doc(chair, 'eventMeta', 'by-chair'), { createdBy: ADMIN_EMAIL })));
 await check('student CANNOT forge an authorship record', () =>

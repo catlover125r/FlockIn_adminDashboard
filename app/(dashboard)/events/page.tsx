@@ -22,7 +22,8 @@ export default function EventsPage() {
   // Chairs may create events and nothing else — no editing, activating,
   // deleting, sign-up lists or notifications. Firestore rules and the API
   // routes enforce that; this only decides what is worth rendering.
-  const { isFullAdmin } = useAuth();
+  const { isFullAdmin, user } = useAuth();
+  const myEmail = user?.email?.toLowerCase();
   const [events, setEvents] = useState<FlockEvent[]>([]);
   const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
   const [loading, setLoading] = useState(true);
@@ -72,17 +73,19 @@ export default function EventsPage() {
         : data;
       setEvents(final);
 
-      // /eventMeta is admin-only by design, so a chair reading it would get a
-      // permission error on a page that is otherwise theirs to use.
+      // Admins read the whole authorship log; a chair may only read their own
+      // rows, and must ask for them by name or the query is rejected outright.
       if (isFullAdmin) {
         setEventMeta(await getEventMeta());
+      } else if (myEmail) {
+        setEventMeta(await getEventMeta(myEmail));
       }
     } catch {
       addToast('Failed to load events', 'error');
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }, [isFullAdmin]);
+  }, [isFullAdmin, myEmail]);
 
   useEffect(() => {
     loadEvents();
@@ -203,8 +206,19 @@ export default function EventsPage() {
     return new Date(year, month - 1, day, hour, min) < new Date();
   }
 
-  const upcomingEvents = events.filter((e) => !isEventPast(e));
-  const pastEvents = events.filter((e) => isEventPast(e));
+  // A chair sees only what they made. Events created before authorship was
+  // recorded have no /eventMeta row and so belong to nobody — correct here,
+  // since a chair did not create them either.
+  //
+  // Presentation only. /events is world-readable to signed-in users because the
+  // student app needs it, and chairs are students, so this declutters their
+  // page rather than restricting anything.
+  const visibleEvents = isFullAdmin
+    ? events
+    : events.filter((e) => eventMeta[e.id]);
+
+  const upcomingEvents = visibleEvents.filter((e) => !isEventPast(e));
+  const pastEvents = visibleEvents.filter((e) => isEventPast(e));
 
   function renderRows(list: FlockEvent[]) {
     return list.map((event) => (
@@ -404,8 +418,14 @@ export default function EventsPage() {
                 <line x1="3" y1="10" x2="21" y2="10" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-gray-700 mb-1">No upcoming events</p>
-            <p className="text-xs text-gray-400 mb-5">Create your first event to get started</p>
+            <p className="text-sm font-medium text-gray-700 mb-1">
+              {isFullAdmin ? 'No upcoming events' : 'You have no upcoming events'}
+            </p>
+            <p className="text-xs text-gray-400 mb-5">
+              {isFullAdmin
+                ? 'Create your first event to get started'
+                : 'This page shows the events you created'}
+            </p>
             <button onClick={openAdd} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700">
               Add Event
             </button>
