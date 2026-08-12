@@ -16,6 +16,17 @@ export interface FlockEvent {
   createdAt: Timestamp | Date | string;
 }
 
+/**
+ * Who created an event. Stored in /eventMeta keyed by event ID, not on the
+ * event itself — students can read /events, and Firestore cannot restrict a
+ * single field.
+ */
+export interface EventMeta {
+  createdBy: string;
+  createdByName: string;
+  createdAt?: Timestamp | Date | string;
+}
+
 export interface Student {
   id: string;           // sanitizedEmail used as doc ID
   email: string;

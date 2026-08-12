@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   getEvents,
+  getEventMeta,
   createEvent,
   updateEvent,
   deleteEvent,
   postAuthed,
 } from '@/lib/firebase';
-import type { FlockEvent } from '@/lib/types';
+import type { FlockEvent, EventMeta } from '@/lib/types';
 import { formatEventDate, formatEventTime } from '@/lib/types';
 import EventModal from '@/components/EventModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -23,6 +24,7 @@ export default function EventsPage() {
   // routes enforce that; this only decides what is worth rendering.
   const { isFullAdmin } = useAuth();
   const [events, setEvents] = useState<FlockEvent[]>([]);
+  const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<FlockEvent | null>(null);
@@ -69,6 +71,12 @@ export default function EventsPage() {
         ? (await getEvents()) as FlockEvent[]
         : data;
       setEvents(final);
+
+      // /eventMeta is admin-only by design, so a chair reading it would get a
+      // permission error on a page that is otherwise theirs to use.
+      if (isFullAdmin) {
+        setEventMeta(await getEventMeta());
+      }
     } catch {
       addToast('Failed to load events', 'error');
     } finally {
@@ -209,6 +217,12 @@ export default function EventsPage() {
         </td>
         <td className="px-6 py-4">
           <span className="text-sm text-gray-600 line-clamp-1 max-w-[200px] block">{event.task}</span>
+          {/* Authorship. Admin-only, and never sent to the student app. */}
+          {eventMeta[event.id] && (
+            <span className="block text-[11px] text-gray-400 mt-0.5 truncate max-w-[200px]">
+              by {eventMeta[event.id].createdByName || eventMeta[event.id].createdBy}
+            </span>
+          )}
         </td>
         <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventDate(event.date)}</td>
         <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{formatEventTime(event.time)}</td>

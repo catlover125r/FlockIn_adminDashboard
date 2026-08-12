@@ -24,11 +24,12 @@ import {
   limit,
   setDoc,
   serverTimestamp,
+  writeBatch,
   Timestamp,
 } from 'firebase/firestore';
 import { adminDocId, isOwnerEmail } from './owner';
 import { normalizeRole, type AdminRole } from './roles';
-import type { Admin } from './types';
+import type { Admin, EventMeta } from './types';
 
 // authDomain must stay on <project>.firebaseapp.com. Firebase's sign-in helper
 // hands Google a redirect_uri of https://<authDomain>/__/auth/handler, and the
@@ -202,12 +203,49 @@ export async function getEvents() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/**
+ * Creates an event and, alongside it, the authorship record.
+ *
+ * The two are written in one batch so an event can never exist without a note
+ * of who made it — the whole point is that the log is complete. Authorship
+ * lives in /eventMeta rather than on the event because students can read
+ * /events and Firestore permissions cannot hide a single field.
+ */
 export async function createEvent(data: Record<string, unknown>) {
-  const ref = await addDoc(collection(db, 'events'), {
-    ...data,
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error('Not signed in');
+
+  // Generate the ID client-side so both documents can go in the same batch.
+  const eventRef = doc(collection(db, 'events'));
+  const batch = writeBatch(db);
+
+  batch.set(eventRef, { ...data, createdAt: serverTimestamp() });
+  batch.set(doc(db, 'eventMeta', eventRef.id), {
+    createdBy: user.email.toLowerCase(),
+    createdByName: user.displayName ?? '',
     createdAt: serverTimestamp(),
   });
-  return ref.id;
+
+  await batch.commit();
+  return eventRef.id;
+}
+
+/**
+ * Authorship for every event, as a map of event ID to record. Admin-only —
+ * a chair calling this gets a permission error, so guard the call site.
+ */
+export async function getEventMeta(): Promise<Record<string, EventMeta>> {
+  const snap = await getDocs(collection(db, 'eventMeta'));
+  const byId: Record<string, EventMeta> = {};
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    byId[d.id] = {
+      createdBy: (data.createdBy as string) ?? '',
+      createdByName: (data.createdByName as string) ?? '',
+      createdAt: data.createdAt,
+    };
+  });
+  return byId;
 }
 
 export async function updateEvent(id: string, data: Record<string, unknown>) {

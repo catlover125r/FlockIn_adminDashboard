@@ -289,6 +289,31 @@ await check('chair CANNOT promote themselves', () =>
 await check('chair can still read events', () =>
   assertSucceeds(getDoc(doc(chair, 'events', EVENT_ACTIVE))));
 
+console.log('\nEvent authorship (/eventMeta)');
+// The reason this collection exists: students can read every event, so
+// authorship cannot live on the event document itself.
+await check('student CANNOT read who created an event', () =>
+  assertFails(getDoc(doc(alice, 'eventMeta', EVENT_ACTIVE))));
+await check('student CANNOT list event authorship', () =>
+  assertFails(getDocs(collection(alice, 'eventMeta'))));
+await check('admin CAN read event authorship', () =>
+  assertSucceeds(getDocs(collection(adminDb, 'eventMeta'))));
+await check('chair CAN record themselves as author', () =>
+  assertSucceeds(setDoc(doc(chair, 'eventMeta', 'by-chair'),
+    { createdBy: CHAIR_EMAIL, createdByName: 'Chair', createdAt: new Date() })));
+// Otherwise the log is worthless: anyone could file their event under someone
+// else's name.
+await check('chair CANNOT attribute an event to somebody else', () =>
+  assertFails(setDoc(doc(chair, 'eventMeta', 'forged'),
+    { createdBy: ADMIN_EMAIL, createdByName: 'Boss', createdAt: new Date() })));
+await check('chair CANNOT read the authorship log', () =>
+  assertFails(getDocs(collection(chair, 'eventMeta'))));
+await check('chair CANNOT rewrite an existing authorship record', () =>
+  assertFails(updateDoc(doc(chair, 'eventMeta', 'by-chair'), { createdBy: ADMIN_EMAIL })));
+await check('student CANNOT forge an authorship record', () =>
+  assertFails(setDoc(doc(alice, 'eventMeta', 'by-alice'),
+    { createdBy: ALICE_EMAIL, createdByName: 'Alice', createdAt: new Date() })));
+
 console.log('\nRole defaulting');
 await check('a row with no role field is a full admin', () =>
   assertSucceeds(setDoc(doc(legacy, 'events', 'by-legacy'), { title: 'x', hours: 1, isActive: false })));

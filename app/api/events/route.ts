@@ -67,6 +67,16 @@ export async function POST(req: NextRequest) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Authorship, kept in a sibling collection students cannot read — see the
+    // /eventMeta block in firestore.rules. Written here as well as in
+    // lib/firebase.ts createEvent() so no path can produce an unattributed
+    // event.
+    await db.collection('eventMeta').doc(eventRef.id).set({
+      createdBy: auth.email,
+      createdByName: '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     // Send push notification to all whitelisted students
     let notifResult = { sent: 0, failed: 0 };
     try {
