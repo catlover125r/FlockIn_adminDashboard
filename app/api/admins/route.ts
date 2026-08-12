@@ -39,7 +39,11 @@ export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
-  const snap = await getAdminDB().collection('admins').orderBy('email').get();
+  // Unordered read, sorted below. Ordering in the query would need
+  // orderBy('role'), and Firestore drops documents that lack the field being
+  // ordered on — the rows written before roles existed have no role field, so
+  // they would silently disappear from the list.
+  const snap = await getAdminDB().collection('admins').get();
 
   const admins: AdminRow[] = snap.docs.map((d) => {
     const data = d.data();
@@ -58,6 +62,18 @@ export async function GET(req: NextRequest) {
           : undefined,
     };
   });
+
+  // Admins first, then alphabetically within each role. Falls back to the email
+  // for a row with no name so those sort somewhere stable rather than bunching
+  // at the top under an empty string.
+  const roleRank: Record<AdminRole, number> = { admin: 0, chair: 1 };
+  admins.sort(
+    (a, b) =>
+      roleRank[a.role] - roleRank[b.role] ||
+      (a.name || a.email).localeCompare(b.name || b.email, 'en', {
+        sensitivity: 'base',
+      })
+  );
 
   return NextResponse.json({
     admins,
