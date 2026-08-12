@@ -1,8 +1,9 @@
 /**
  * What each person in /admins is allowed to do.
  *
- * - admin: everything in the dashboard except changing the admin list itself,
- *   which stays with the owner (see lib/owner.ts).
+ * - admin: everything, including managing this list. The only thing reserved to
+ *   the owner (see lib/owner.ts) is that their own row cannot be removed or
+ *   demoted — by anybody, themselves included.
  * - chair: create events, and nothing else. No roster, no hours, no
  *   notifications, no admin list — the roster and check-in pages are student
  *   PII, and a chair has no reason to hold it.
@@ -15,7 +16,7 @@
 export type AdminRole = 'admin' | 'chair';
 
 export const ADMIN_ROLES: { value: AdminRole; label: string; blurb: string }[] = [
-  { value: 'admin', label: 'Admin', blurb: 'Full access, except changing this list' },
+  { value: 'admin', label: 'Admin', blurb: 'Full access, cannot remove the owner' },
   { value: 'chair', label: 'Chair', blurb: 'Can only create events' },
 ];
 

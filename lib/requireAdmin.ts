@@ -114,23 +114,6 @@ export async function requireAdmin(req: NextRequest): Promise<AdminCheck> {
   return check;
 }
 
-/**
- * Verifies the caller is the owner — the single account permitted to change who
- * is an admin, and what role they hold.
- */
-export async function requireOwner(req: NextRequest): Promise<AdminCheck> {
-  const check = await requireAdmin(req);
-  if (!check.ok) return check;
-
-  if (!check.isOwner) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: 'Only the owner can change the admin list.' },
-        { status: 403 }
-      ),
-    };
-  }
-
-  return check;
-}
+// There is deliberately no requireOwner. Every full admin can change the admin
+// list; the owner's privilege is narrower than a whole gate — their row cannot
+// be removed or demoted, which /api/admins enforces per-row.

@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDB } from '@/lib/firebaseAdmin';
-import { requireAdmin, requireOwner } from '@/lib/requireAdmin';
+import { requireAdmin } from '@/lib/requireAdmin';
 import { adminDocId, isOwnerEmail, OWNER_EMAIL } from '@/lib/owner';
 import { normalizeRole, type AdminRole } from '@/lib/roles';
 
 /**
  * The admin list.
  *
- * Reading is open to any admin; adding and removing is restricted to the owner
- * (see requireOwner). Firestore rules deny all client writes to /admins, so
- * this route is the only way in, and it runs with Admin SDK credentials that
- * bypass those rules — which is exactly why the owner check has to live here
- * rather than in the rules.
+ * Any full admin may read it and change it — add, remove, and set roles. Chairs
+ * are excluded entirely by requireAdmin.
+ *
+ * The owner is the one exception carved out of that: their row cannot be
+ * removed or demoted by anybody, themselves included. It would not actually
+ * revoke anything if it were — the owner is a full admin by virtue of their
+ * address (lib/owner.ts), not by virtue of the row — so allowing it would only
+ * let the table say something untrue, and would remove the guarantee that at
+ * least one account can always repair the list.
+ *
+ * Firestore rules deny all client writes to /admins, so this route is the only
+ * way in, and it runs with Admin SDK credentials that bypass those rules —
+ * which is exactly why these checks have to live here rather than in the rules.
  */
 
 interface AdminRow {
@@ -59,7 +67,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireOwner(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
   let body: { email?: unknown; name?: unknown; role?: unknown };
@@ -101,7 +109,7 @@ export async function POST(req: NextRequest) {
 
 /** Changes an existing admin's role. Owner only, same as adding and removing. */
 export async function PATCH(req: NextRequest) {
-  const auth = await requireOwner(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
   let body: { id?: unknown; role?: unknown };
@@ -140,7 +148,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireOwner(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
   const id = req.nextUrl.searchParams.get('id') ?? '';
@@ -148,9 +156,8 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Missing admin id.' }, { status: 400 });
   }
 
-  // The owner is an admin by virtue of OWNER_EMAIL, not by virtue of this row,
-  // so deleting it would not actually revoke anything — it would just make the
-  // list lie about who has access. Refuse rather than allow that drift.
+  // Applies to every caller including the owner themselves — see the note at
+  // the top of this file.
   if (id === adminDocId(OWNER_EMAIL)) {
     return NextResponse.json(
       { error: 'The owner cannot be removed.' },

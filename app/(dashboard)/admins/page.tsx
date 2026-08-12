@@ -11,7 +11,10 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 type Toast = { id: number; message: string; type: 'success' | 'error' };
 
 export default function AdminsPage() {
-  const { isOwnerUser } = useAuth();
+  // Every full admin can manage this list. The owner's privilege is not a gate
+  // on the page but a property of one row — isOwnerRow() below is what keeps
+  // their entry from being removed or demoted, by anyone.
+  const { isFullAdmin } = useAuth();
   useRequireFullAdmin();
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [ownerEmail, setOwnerEmail] = useState('');
@@ -109,16 +112,14 @@ export default function AdminsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Admins</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Everyone who can sign in to this dashboard.{' '}
-          {isOwnerUser
-            ? 'Only you can change this list.'
-            : `Only ${ownerEmail || 'the owner'} can change this list.`}
+          Everyone who can sign in to this dashboard. Any admin can change this
+          list; the owner&apos;s own row cannot be removed or changed by anyone.
         </p>
       </div>
 
-      {/* Add form — owner only. The server enforces this too; hiding it just
-          keeps the page honest for everyone else. */}
-      {isOwnerUser && (
+      {/* Add form. The server enforces this too; hiding it just keeps the
+          page honest for a chair who guesses the URL. */}
+      {isFullAdmin && (
         <form
           onSubmit={handleAdd}
           className="bg-white rounded-2xl shadow-card p-6 mb-6 flex flex-wrap items-end gap-4"
@@ -174,10 +175,10 @@ export default function AdminsPage() {
         </form>
       )}
 
-      {isOwnerUser && (
+      {isFullAdmin && (
         <p className="text-xs text-gray-400 mb-6 -mt-2">
-          <span className="font-semibold text-gray-500">Admin</span> gets everything
-          you have except this page.{' '}
+          <span className="font-semibold text-gray-500">Admin</span> gets everything,
+          including this page — they can add and remove other admins.{' '}
           <span className="font-semibold text-gray-500">Chair</span> can only create
           events — no roster, hours, or notifications. They do not need to have
           signed in before; access takes effect the next time they load the
@@ -202,7 +203,7 @@ export default function AdminsPage() {
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Email</th>
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Role</th>
                   <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Added</th>
-                  {isOwnerUser && (
+                  {isFullAdmin && (
                     <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide px-6 py-3">Action</th>
                   )}
                 </tr>
@@ -233,7 +234,7 @@ export default function AdminsPage() {
                         >
                           Admin
                         </span>
-                      ) : isOwnerUser ? (
+                      ) : isFullAdmin ? (
                         <select
                           value={admin.role}
                           disabled={savingRoleId === admin.id}
@@ -261,7 +262,7 @@ export default function AdminsPage() {
                           hand it a Date rather than a raw ISO string. */}
                       {admin.addedAt ? formatTimestamp(new Date(admin.addedAt)) : '—'}
                     </td>
-                    {isOwnerUser && (
+                    {isFullAdmin && (
                       <td className="px-6 py-4 text-right">
                         {isOwnerRow(admin) ? (
                           <span className="text-xs text-gray-300">Cannot remove</span>
